@@ -162,3 +162,8 @@ https://배포주소/setup-admin
 - 공용 계정 하나를 여러 명이 함께 쓰지 마세요.
 - 실제 로우데이터 업로드 전에는 반드시 로그인 제한을 확인하세요.
 - `SUPABASE_SERVICE_ROLE_KEY`와 `INITIAL_ADMIN_SETUP_KEY`는 외부에 노출하지 마세요.
+
+
+## 2026-06-17 관리자 계정 생성 API 보정
+
+일부 브라우저/Vercel 조합에서 관리자 페이지는 로그인 상태로 보이지만 `/api/admin/users` 호출 시 쿠키 세션이 전달되지 않아 `로그인이 필요합니다.`가 표시될 수 있습니다. v3.1에서는 브라우저 Supabase 세션의 access token을 `Authorization: Bearer ...` 헤더로 함께 전달하고, 서버 API에서 해당 토큰을 검증하도록 보정했습니다.

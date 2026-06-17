@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 type UserRow = {
   id: string;
@@ -22,10 +23,36 @@ export function UserAdminPanel() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  async function getAuthHeaders(includeJson = false) {
+    const supabase = createClient();
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+
+    if (!token) {
+      throw new Error("로그인이 필요합니다. 로그아웃 후 다시 로그인해주세요.");
+    }
+
+    return {
+      ...(includeJson ? { "Content-Type": "application/json" } : {}),
+      Authorization: `Bearer ${token}`
+    };
+  }
+
   async function loadUsers() {
-    const response = await fetch("/api/admin/users");
-    const result = await response.json();
-    if (response.ok) setUsers(result.users || []);
+    try {
+      const headers = await getAuthHeaders(false);
+      const response = await fetch("/api/admin/users", {
+        headers,
+        credentials: "same-origin",
+        cache: "no-store"
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "사용자 목록을 불러오지 못했습니다.");
+      setUsers(result.users || []);
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "사용자 목록을 불러오지 못했습니다.");
+    }
   }
 
   useEffect(() => {
@@ -39,9 +66,11 @@ export function UserAdminPanel() {
     setIsLoading(true);
 
     try {
+      const headers = await getAuthHeaders(true);
       const response = await fetch("/api/admin/users", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
+        credentials: "same-origin",
         body: JSON.stringify({ loginId, name, password, role, status })
       });
       const result = await response.json();

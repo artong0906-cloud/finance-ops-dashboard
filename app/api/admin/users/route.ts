@@ -11,17 +11,38 @@ type CreateUserPayload = {
   status?: "active" | "inactive";
 };
 
-async function assertAdmin() {
+async function getAuthenticatedEmail(request: NextRequest) {
+  const authorization = request.headers.get("authorization");
+  const token = authorization?.replace(/^Bearer\s+/i, "").trim();
+
+  if (token) {
+    const admin = createAdminClient();
+    const { data, error } = await admin.auth.getUser(token);
+    if (!error && data.user?.email) {
+      return data.user.email;
+    }
+  }
+
   const supabase = await createClient();
   const { data: authData, error: authError } = await supabase.auth.getUser();
-  if (authError || !authData.user?.email) {
+  if (!authError && authData.user?.email) {
+    return authData.user.email;
+  }
+
+  return null;
+}
+
+async function assertAdmin(request: NextRequest) {
+  const email = await getAuthenticatedEmail(request);
+  if (!email) {
     return { ok: false as const, response: NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 }) };
   }
 
-  const { data: profile, error: profileError } = await supabase
+  const admin = createAdminClient();
+  const { data: profile, error: profileError } = await admin
     .from("allowed_users")
     .select("email,login_id,role,status")
-    .eq("email", authData.user.email)
+    .eq("email", email)
     .eq("status", "active")
     .maybeSingle();
 
@@ -32,8 +53,8 @@ async function assertAdmin() {
   return { ok: true as const, profile };
 }
 
-export async function GET() {
-  const adminCheck = await assertAdmin();
+export async function GET(request: NextRequest) {
+  const adminCheck = await assertAdmin(request);
   if (!adminCheck.ok) return adminCheck.response;
 
   const admin = createAdminClient();
@@ -47,7 +68,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const adminCheck = await assertAdmin();
+  const adminCheck = await assertAdmin(request);
   if (!adminCheck.ok) return adminCheck.response;
 
   try {
