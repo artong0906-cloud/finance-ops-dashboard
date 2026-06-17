@@ -67,7 +67,7 @@ function parseCsv(text: string, fileName: string): Promise<UploadPreview> {
           sampleRows: rows.slice(0, 10)
         });
       },
-      error: (error) => reject(error)
+      error: (error: Error) => reject(error)
     });
   });
 }

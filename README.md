@@ -27,3 +27,9 @@
 - 로그인 성공 후 client-side router 이동 대신 full reload로 이동해 Supabase cookie/session 반영을 안정화했습니다.
 - 보호 페이지를 force-dynamic 처리해 로그인 상태가 정적 캐시/이전 redirect 상태로 남는 문제를 줄였습니다.
 - v4.1 기업은행 미리보기 보정은 유지합니다.
+
+
+## v4.4 Upload build type fix
+
+- Fixed TypeScript strict build failure in `services/uploads/parse.ts` by explicitly typing the PapaParse error callback parameter.
+- Keeps v4.1 bank preview parsing and v4.2 upload auth session fixes.
