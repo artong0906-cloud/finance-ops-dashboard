@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizeUploadRows, type UploadType } from "@/services/uploads/normalize";
 
@@ -65,7 +64,7 @@ function safeRows(rows: unknown) {
     });
 }
 
-async function tableExists(admin: ReturnType<typeof createClient>, tableName: string) {
+async function tableExists(admin: any, tableName: string) {
   const { error } = await admin.from(tableName).select("id").limit(1);
   return !error;
 }
