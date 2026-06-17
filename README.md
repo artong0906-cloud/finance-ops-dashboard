@@ -1,27 +1,33 @@
-# 광고인 FinanceOps Dashboard v1
+# FinanceOps Webapp v3 Password Auth
 
-경영지원팀의 은행·카드·파로스 로우데이터를 업로드하고, 사업부별 매출/지출과 자산·부채·자본을 관리하기 위한 Next.js 웹앱 1단계 골격입니다.
+광고인 경영지원 대시보드 웹앱 3단계 골격입니다.
 
-## 포함 내용
+## v3 변경사항
+- 이메일 링크 로그인 제거
+- 아이디 + 비밀번호 로그인 적용
+- 관리자 계정생성 화면 추가
+- 사용자는 이메일을 입력하지 않음
+- 내부적으로는 `아이디@financeops.local` 형식의 Supabase Auth 계정을 자동 생성
+- 최초 관리자 생성용 `/setup-admin` 페이지 추가
+- 관리자 전용 `/admin` 사용자 생성 기능 추가
 
-- Next.js App Router 구조
-- 메인/은행/카드/지출/자산부채/업로드/관리자 페이지
-- v11 프로토타입 원본 HTML: `public/prototype-v11.html`
-- Supabase 연결 준비 파일
-- DB 설계 SQL: `database/schema.sql`
-- 초기 seed SQL: `database/seed.sql`
-- mock data 기반 화면
-- 1단계 실행 가이드: `docs/STEP_01_SETUP_GUIDE.md`
+## 중요 파일
+- `app/login/page.tsx`
+- `app/login/LoginForm.tsx`
+- `app/setup-admin/page.tsx`
+- `app/api/setup-admin/route.ts`
+- `app/admin/UserAdminPanel.tsx`
+- `app/api/admin/users/route.ts`
+- `lib/auth/internal-email.ts`
+- `lib/supabase/admin.ts`
+- `database/migrations/20260617_login_id_password_auth.sql`
+- `docs/STEP_02_PASSWORD_AUTH_GUIDE.md`
 
-## 실행
+## 추가 환경변수
+기존 Supabase 환경변수 3개 외에 최초 관리자 생성키를 추가합니다.
 
-```bash
-pnpm install
-pnpm dev
+```env
+INITIAL_ADMIN_SETUP_KEY=직접정한_초기관리자생성키
 ```
 
-브라우저에서 `http://localhost:3000`을 엽니다.
-
-## 다음 단계
-
-2단계에서 Supabase 로그인, 업로드, 파일 미리보기, 검증대기 기능을 연결합니다.
+최초 관리자 계정을 만든 뒤에는 Vercel에서 이 값을 삭제하거나 다른 값으로 바꿔두는 것을 권장합니다.

@@ -1,6 +1,6 @@
-insert into allowed_users (email, name, role, status) values
-('artong0906@gmail.com', '후후', 'admin', 'active')
-on conflict (email) do update set name = excluded.name, role = excluded.role, status = excluded.status;
+insert into allowed_users (email, login_id, internal_email, name, role, status) values
+('admin@financeops.local', 'admin', 'admin@financeops.local', '후후', 'admin', 'active')
+on conflict (email) do update set login_id = excluded.login_id, internal_email = excluded.internal_email, name = excluded.name, role = excluded.role, status = excluded.status;
 
 insert into bank_account_master (id, bank_name, account_name, account_no_masked, business_unit, purpose, status) values
 ('BANK_AD_001', '기업은행', '광고사업 운영통장', '***1234', '광고사업부', '광고사업 매출/지출', 'active'),

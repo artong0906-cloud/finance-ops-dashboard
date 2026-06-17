@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getAllowedUser } from "@/lib/auth/session";
 
 const nav = [
   { href: "/dashboard", label: "메인 경영현황판" },
@@ -10,11 +11,16 @@ const nav = [
   { href: "/admin", label: "관리자" }
 ];
 
-export function AppShell({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+export async function AppShell({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+  const { profile } = await getAllowedUser();
+
   return (
     <div className="min-h-screen grid grid-cols-[260px_minmax(0,1fr)] max-lg:grid-cols-1">
       <aside className="bg-white border-r border-[var(--line)] p-5 max-lg:border-r-0 max-lg:border-b">
-        <div className="font-black text-2xl tracking-[-0.04em] mb-6">광고인 FinanceOps</div>
+        <div className="font-black text-2xl tracking-[-0.04em] mb-2">광고인 FinanceOps</div>
+        <div className="rounded-2xl bg-blue-50 border border-blue-100 px-3 py-2 text-xs font-bold text-blue-700 mb-5">
+          {profile.name || profile.login_id || profile.email} · {profile.role}
+        </div>
         <nav className="grid gap-2">
           {nav.map((item) => (
             <Link key={item.href} href={item.href} className="rounded-xl px-3 py-3 text-sm font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-700">
@@ -23,8 +29,9 @@ export function AppShell({ title, description, children }: { title: string; desc
           ))}
         </nav>
         <div className="mt-8 rounded-2xl bg-slate-50 border border-slate-200 p-4 text-xs leading-6 text-slate-500">
-          1단계는 사이트 골격입니다. 실제 로우데이터 업로드와 자동분류는 2단계부터 연결합니다.
+          아이디별 권한에 따라 업로드와 수정 권한을 제한합니다. 실제 로우데이터 업로드는 다음 단계에서 연결합니다.
         </div>
+        <Link href="/auth/logout" className="btn w-full mt-4 text-center">로그아웃</Link>
       </aside>
       <main className="p-7 max-lg:p-4">
         <header className="mb-6 flex items-start justify-between gap-4 max-md:flex-col">

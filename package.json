@@ -20,7 +20,6 @@
     "zod": "latest"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.1",
     "@types/node": "latest",
     "@types/papaparse": "latest",
     "@types/react": "latest",
@@ -30,6 +29,7 @@
     "eslint-config-next": "latest",
     "postcss": "latest",
     "tailwindcss": "latest",
-    "typescript": "latest"
+    "typescript": "latest",
+    "@tailwindcss/postcss": "latest"
   }
 }

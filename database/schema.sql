@@ -6,6 +6,8 @@ create extension if not exists "uuid-ossp";
 create table if not exists allowed_users (
   id uuid primary key default uuid_generate_v4(),
   email text not null unique,
+  login_id text unique,
+  internal_email text unique,
   name text,
   role text not null check (role in ('admin', 'finance', 'executive', 'viewer')),
   status text not null default 'active' check (status in ('active', 'inactive')),
