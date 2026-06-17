@@ -43,6 +43,18 @@ create table if not exists upload_batches (
   uploaded_at timestamptz not null default now()
 );
 
+
+create table if not exists upload_raw_rows (
+  id uuid primary key default uuid_generate_v4(),
+  upload_batch_id uuid not null references upload_batches(id) on delete cascade,
+  row_index integer not null,
+  raw_data jsonb not null,
+  normalized_data jsonb,
+  parse_status text not null default '확인필요' check (parse_status in ('정상', '확인필요', '오류')),
+  memo text,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists transactions (
   id uuid primary key default uuid_generate_v4(),
   upload_batch_id uuid references upload_batches(id),
@@ -115,6 +127,7 @@ alter table allowed_users enable row level security;
 alter table bank_account_master enable row level security;
 alter table card_policy_master enable row level security;
 alter table upload_batches enable row level security;
+alter table upload_raw_rows enable row level security;
 alter table transactions enable row level security;
 alter table balance_movements enable row level security;
 alter table mapping_rules enable row level security;
@@ -126,6 +139,7 @@ create policy "allowed users can read allowed_users" on allowed_users for select
 create policy "allowed users can read bank accounts" on bank_account_master for select using (auth.email() in (select email from allowed_users where status = 'active'));
 create policy "allowed users can read card policies" on card_policy_master for select using (auth.email() in (select email from allowed_users where status = 'active'));
 create policy "allowed users can read uploads" on upload_batches for select using (auth.email() in (select email from allowed_users where status = 'active'));
+create policy "allowed users can read upload raw rows" on upload_raw_rows for select using (auth.email() in (select email from allowed_users where status = 'active'));
 create policy "allowed users can read transactions" on transactions for select using (auth.email() in (select email from allowed_users where status = 'active'));
 create policy "allowed users can read balance" on balance_movements for select using (auth.email() in (select email from allowed_users where status = 'active'));
 create policy "allowed users can read rules" on mapping_rules for select using (auth.email() in (select email from allowed_users where status = 'active'));

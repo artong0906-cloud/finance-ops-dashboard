@@ -1,0 +1,193 @@
+export type UploadType = "bank" | "card" | "pharos" | "balance";
+
+export type NormalizedTransaction = {
+  transaction_date: string;
+  source: "은행" | "카드" | "파로스" | "수기입력";
+  business_unit: "광고사업부" | "플랫폼" | "대외협력" | "공통사용분" | "미배분";
+  vendor: string | null;
+  description: string | null;
+  amount: number;
+  cash_flow_type: "입금" | "출금" | "내부이체" | "제외";
+  main_category: string | null;
+  sub_category: string | null;
+  review_status: "정상" | "확인필요" | "보류" | "확정";
+  memo: string | null;
+};
+
+export type NormalizedUploadRow = {
+  rowIndex: number;
+  rawData: Record<string, string>;
+  normalizedData: Record<string, unknown>;
+  parseStatus: "정상" | "확인필요" | "오류";
+  memo: string | null;
+  transaction: NormalizedTransaction | null;
+};
+
+const dateKeys = ["거래일자", "거래일시", "거래일", "거래일자(년월일)", "승인일자", "이용일자", "사용일자", "전표일자", "일자", "날짜", "date"];
+const vendorKeys = ["거래처", "가맹점명", "사용처", "상호", "업체명", "거래상대방", "받는분", "보내는분", "예금주", "상대계좌예금주명", "상대예금주명", "vendor"];
+const descriptionKeys = ["적요", "거래내용", "기재내용", "내용", "내역", "거래구분", "거래명", "비고", "품목", "메모", "입금의뢰인", "출금계좌인자내용", "description"];
+const amountKeys = ["금액", "거래금액", "거래 금액", "승인금액", "이용금액", "사용금액", "합계", "amount"];
+const incomeKeys = ["입금", "입금액", "입금금액", "입금 금액", "수입", "대변"];
+const outcomeKeys = ["출금", "출금액", "출금금액", "출금 금액", "지출", "차변"];
+const businessUnitKeys = ["사업부", "사업단위", "귀속사업부", "부서", "business_unit"];
+const mainCategoryKeys = ["대분류", "분류", "계정과목", "계정", "main_category"];
+const subCategoryKeys = ["중분류", "소분류", "세부분류", "sub_category"];
+
+function compact(value: string) {
+  return String(value || "").replace(/\s/g, "").toLowerCase();
+}
+
+function pick(row: Record<string, string>, keys: string[]) {
+  const entries = Object.entries(row);
+  const targets = keys.map((key) => compact(key));
+
+  for (const target of targets) {
+    const exact = entries.find(([key]) => compact(key) === target);
+    if (exact && exact[1]) return exact[1];
+  }
+
+  for (const target of targets) {
+    const partial = entries.find(([key, value]) => {
+      const normalizedKey = compact(key);
+      return value && (normalizedKey.includes(target) || target.includes(normalizedKey));
+    });
+    if (partial) return partial[1];
+  }
+
+  return "";
+}
+
+export function parseAmount(value: string) {
+  const raw = String(value || "").trim();
+  if (!raw || raw === "-") return 0;
+
+  const isNegativeByParentheses = /^\(.*\)$/.test(raw);
+  const normalized = raw
+    .replace(/원/g, "")
+    .replace(/,/g, "")
+    .replace(/\s/g, "")
+    .replace(/[()]/g, "")
+    .replace(/[^0-9.-]/g, "");
+
+  const amount = Number(normalized);
+  if (!Number.isFinite(amount)) return 0;
+  return isNegativeByParentheses ? -Math.abs(amount) : amount;
+}
+
+function normalizeDate(value: string) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const match = raw.match(/(20\d{2}|19\d{2})[.\-/년\s]*(\d{1,2})[.\-/월\s]*(\d{1,2})/);
+  if (match) {
+    const [, y, m, d] = match;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+
+  const serial = Number(raw);
+  if (Number.isFinite(serial) && serial > 25000 && serial < 90000) {
+    const utcDays = Math.floor(serial - 25569);
+    const date = new Date(utcDays * 86400 * 1000);
+    return date.toISOString().slice(0, 10);
+  }
+
+  const date = new Date(raw);
+  if (!Number.isNaN(date.getTime())) return date.toISOString().slice(0, 10);
+  return "";
+}
+
+function normalizeBusinessUnit(value: string): NormalizedTransaction["business_unit"] {
+  if (value.includes("플랫폼")) return "플랫폼";
+  if (value.includes("대외")) return "대외협력";
+  if (value.includes("공통")) return "공통사용분";
+  if (value.includes("광고")) return "광고사업부";
+  return "미배분";
+}
+
+function sourceByType(uploadType: UploadType): NormalizedTransaction["source"] {
+  if (uploadType === "bank") return "은행";
+  if (uploadType === "card") return "카드";
+  if (uploadType === "pharos") return "파로스";
+  return "수기입력";
+}
+
+function hasLikelyTransactionSignal(row: Record<string, string>) {
+  const joined = Object.values(row).join(" ").trim();
+  if (!joined || joined === "-") return false;
+  if (/^(\d+|-)$/.test(joined)) return false;
+  return true;
+}
+
+function getAmountAndFlow(row: Record<string, string>, uploadType: UploadType) {
+  const income = parseAmount(pick(row, incomeKeys));
+  const outcome = parseAmount(pick(row, outcomeKeys));
+
+  if (income > 0 || outcome > 0) {
+    if (income >= outcome && income > 0) return { amount: income, cashFlowType: "입금" as const };
+    return { amount: outcome, cashFlowType: "출금" as const };
+  }
+
+  const amount = parseAmount(pick(row, amountKeys));
+  if (uploadType === "card") return { amount: Math.abs(amount), cashFlowType: "출금" as const };
+  if (amount < 0) return { amount: Math.abs(amount), cashFlowType: "출금" as const };
+  return { amount: Math.abs(amount), cashFlowType: amount >= 0 ? ("입금" as const) : ("출금" as const) };
+}
+
+function inferMemo(missing: string[]) {
+  if (missing.length === 0) return null;
+  return `자동 인식 필요: ${missing.join(", ")}`;
+}
+
+export function normalizeUploadRows(uploadType: UploadType, rows: Record<string, string>[]): NormalizedUploadRow[] {
+  return rows.map((row, index) => {
+    const transactionDate = normalizeDate(pick(row, dateKeys));
+    const vendor = pick(row, vendorKeys) || null;
+    const description = pick(row, descriptionKeys) || vendor || null;
+    const { amount, cashFlowType } = getAmountAndFlow(row, uploadType);
+    const businessUnit = normalizeBusinessUnit(pick(row, businessUnitKeys));
+    const mainCategory = pick(row, mainCategoryKeys) || null;
+    const subCategory = pick(row, subCategoryKeys) || null;
+
+    const missing: string[] = [];
+    if (!hasLikelyTransactionSignal(row)) missing.push("거래행 아님");
+    if (!transactionDate) missing.push("거래일자");
+    if (!amount) missing.push("금액");
+    if (!description) missing.push("적요/거래처");
+
+    const parseStatus = missing.length === 0 ? "정상" : "확인필요";
+
+    const transaction = transactionDate && amount
+      ? {
+          transaction_date: transactionDate,
+          source: sourceByType(uploadType),
+          business_unit: businessUnit,
+          vendor,
+          description,
+          amount,
+          cash_flow_type: cashFlowType,
+          main_category: mainCategory,
+          sub_category: subCategory,
+          review_status: parseStatus === "정상" ? ("확인필요" as const) : ("확인필요" as const),
+          memo: inferMemo(missing)
+        }
+      : null;
+
+    return {
+      rowIndex: index + 1,
+      rawData: row,
+      normalizedData: {
+        transaction_date: transactionDate,
+        vendor,
+        description,
+        amount,
+        cash_flow_type: cashFlowType,
+        business_unit: businessUnit,
+        main_category: mainCategory,
+        sub_category: subCategory
+      },
+      parseStatus,
+      memo: inferMemo(missing),
+      transaction
+    };
+  });
+}
