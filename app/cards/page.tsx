@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { AppShell } from "@/components/layout/AppShell";
 import { transactions } from "@/data/mock";
 import { formatKRW } from "@/services/dashboard/calculations";

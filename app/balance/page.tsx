@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { AppShell } from "@/components/layout/AppShell";
 import { balanceMovements } from "@/data/mock";
 import { endingAmount, formatKRW, sumBy } from "@/services/dashboard/calculations";

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { AppShell } from "@/components/layout/AppShell";
 import { KpiCard } from "@/components/shared/KpiCard";
 import { balanceMovements, bankAccounts, transactions } from "@/data/mock";
