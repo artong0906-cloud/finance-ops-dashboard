@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizeUploadRows, type UploadType } from "@/services/uploads/normalize";
 
@@ -20,6 +21,17 @@ async function getAuthenticatedEmail(request: NextRequest) {
     const admin = createAdminClient();
     const { data, error } = await admin.auth.getUser(token);
     if (!error && data.user?.email) return data.user.email;
+  }
+
+  // Same-origin API calls can rely on Supabase session cookies.
+  // This fallback prevents the upload save API from failing when the browser client
+  // has a valid cookie session but does not expose an access token to getSession().
+  try {
+    const supabase = await createClient();
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (!authError && authData.user?.email) return authData.user.email;
+  } catch {
+    // Fall through to the standard unauthenticated response below.
   }
 
   return null;

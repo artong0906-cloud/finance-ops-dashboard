@@ -36,14 +36,19 @@ function formatDateTime(value: string) {
 }
 
 async function getAuthHeaders(includeJson = false) {
-  const supabase = createClient();
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-  if (!token) throw new Error("로그인이 필요합니다. 로그아웃 후 다시 로그인해주세요.");
-  return {
-    ...(includeJson ? { "Content-Type": "application/json" } : {}),
-    Authorization: `Bearer ${token}`
-  };
+  const headers: Record<string, string> = includeJson ? { "Content-Type": "application/json" } : {};
+
+  try {
+    const supabase = createClient();
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (token) headers.Authorization = `Bearer ${token}`;
+  } catch {
+    // Same-origin cookies are still sent with the request.
+    // The API route also checks Supabase server cookies as a fallback.
+  }
+
+  return headers;
 }
 
 export function UploadWorkspace() {
