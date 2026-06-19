@@ -33,3 +33,5 @@
 
 - Fixed TypeScript strict build failure in `services/uploads/parse.ts` by explicitly typing the PapaParse error callback parameter.
 - Keeps v4.1 bank preview parsing and v4.2 upload auth session fixes.
+
+Codex GitHub 연결 테스트
