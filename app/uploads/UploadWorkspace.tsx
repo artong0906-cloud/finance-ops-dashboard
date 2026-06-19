@@ -35,18 +35,25 @@ function formatDateTime(value: string) {
   }
 }
 
-async function getAuthHeaders(includeJson = false) {
-  const headers: Record<string, string> = includeJson ? { "Content-Type": "application/json" } : {};
-
+async function getAccessToken() {
   try {
     const supabase = createClient();
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    if (token) headers.Authorization = `Bearer ${token}`;
+    const { data, error } = await supabase.auth.getSession();
+    if (!error && data.session?.access_token) return data.session.access_token;
+
+    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+    if (!refreshError && refreshed.session?.access_token) return refreshed.session.access_token;
   } catch {
-    // Same-origin cookies are still sent with the request.
-    // The API route also checks Supabase server cookies as a fallback.
+    // Same-origin cookies are sent with the request as a server-side fallback.
   }
+
+  return null;
+}
+
+async function getAuthHeaders(includeJson = false) {
+  const headers: Record<string, string> = includeJson ? { "Content-Type": "application/json" } : {};
+  const token = await getAccessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
 
   return headers;
 }
@@ -82,7 +89,7 @@ export function UploadWorkspace() {
     setIsLoadingBatches(true);
     try {
       const headers = await getAuthHeaders(false);
-      const response = await fetch("/api/uploads", { headers, credentials: "same-origin", cache: "no-store" });
+      const response = await fetch("/api/uploads", { headers, credentials: "include", cache: "no-store" });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "업로드 이력을 불러오지 못했습니다.");
       setBatches(result.batches || []);
@@ -135,7 +142,7 @@ export function UploadWorkspace() {
       const response = await fetch("/api/uploads", {
         method: "POST",
         headers,
-        credentials: "same-origin",
+        credentials: "include",
         body: JSON.stringify({
           uploadType,
           fileName: preview.fileName,
