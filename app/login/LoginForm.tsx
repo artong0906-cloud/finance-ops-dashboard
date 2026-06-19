@@ -51,7 +51,7 @@ export function LoginForm() {
       <label className="grid gap-2 text-sm font-bold text-slate-700">
         아이디
         <input
-          className="rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-blue-500"
+          className="field"
           type="text"
           value={loginId}
           onChange={(event) => setLoginId(event.target.value)}
@@ -64,7 +64,7 @@ export function LoginForm() {
       <label className="grid gap-2 text-sm font-bold text-slate-700">
         비밀번호
         <input
-          className="rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-blue-500"
+          className="field"
           type="password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
@@ -75,7 +75,7 @@ export function LoginForm() {
       <button className="btn btn-primary w-full" type="submit" disabled={isLoading}>
         {isLoading ? "로그인 중..." : "로그인"}
       </button>
-      {error ? <div className="rounded-2xl bg-red-50 border border-red-200 p-4 text-sm font-bold text-red-700">{error}</div> : null}
+      {error ? <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-sm font-bold text-red-700">{error}</div> : null}
     </form>
   );
 }

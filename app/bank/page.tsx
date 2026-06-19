@@ -13,13 +13,13 @@ export default function BankPage() {
           <div className="card" key={account.id}>
             <div className="text-xs font-black text-slate-500">{account.businessUnit}</div>
             <div className="font-black mt-2">{account.accountName}</div>
-            <div className="text-2xl font-black mt-3">{formatKRW(account.currentBalance)}</div>
+            <div className="metric-value mt-3">{formatKRW(account.currentBalance)}</div>
             <div className="text-xs text-slate-500 mt-2">{account.bankName} {account.maskedNo}</div>
           </div>
         ))}
       </section>
       <section className="card">
-        <h2 className="text-xl font-black tracking-[-0.04em] mb-4">은행 거래 상세</h2>
+        <h2 className="section-title mb-4">은행 거래 상세</h2>
         <div className="table-wrap">
           <table>
             <thead><tr><th>일자</th><th>통장</th><th>사업부</th><th>구분</th><th>거래처</th><th>적요</th><th>금액</th><th>반영</th></tr></thead>
