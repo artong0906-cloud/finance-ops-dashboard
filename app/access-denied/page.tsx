@@ -5,7 +5,7 @@ export default function AccessDeniedPage() {
     <main className="min-h-screen flex items-center justify-center p-6">
       <section className="card max-w-lg w-full">
         <div className="text-sm font-black text-red-600 mb-3">Access Denied</div>
-        <h1 className="text-3xl font-black tracking-[-0.05em]">접근 권한이 없습니다</h1>
+        <h1 className="text-2xl font-black">접근 권한이 없습니다</h1>
         <p className="mt-3 text-sm text-slate-500 leading-6">
           로그인은 되었지만 활성 사용자로 등록되어 있지 않습니다. 관리자에게 아이디 활성화 또는 권한 부여를 요청하세요.
         </p>
