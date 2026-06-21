@@ -214,29 +214,29 @@ export function classifyFirstPass(input: FirstPassInput): FirstPassResult {
       confidence: 0.9,
       matchedRule: "ad-cost"
     });
-  } else if (includesAny(text, ["앱개발비", "서버구축비", "비품자산", "임차보증금", "보증금", "임직원대여금", "개발중인무형자산"])) {
+  } else if (includesAny(text, ["앱개발비", "서버구축비", "비품자산", "임차보증금", "보증금", "임직원대여금", "개발중인무형자산", "지식재산공제부금", "자산취득", "유무형자산"])) {
     apply({
       businessUnit: includesAny(text, ["앱", "서버", "플랫폼"]) ? "플랫폼" : result.businessUnit === "미배분" ? "공통사용분" : result.businessUnit,
       mainCategory: "자산취득",
-      subCategory: includesAny(text, ["앱", "서버", "무형"]) ? "유무형자산" : "보증금/비품",
+      subCategory: includesAny(text, ["앱", "서버", "무형", "지식재산"]) ? "유무형자산" : "보증금/비품",
       detailCategory: originalMain === "미분류" ? originalSub : originalMain,
       expenseBasis: "자산성",
       reviewStatus: "정상",
       confidence: 0.85,
       matchedRule: "asset-acquisition"
     });
-  } else if (includesAny(text, ["#인투1", "인투(집)", "지급임차료", "사택", "월세"])) {
+  } else if (includesAny(text, ["#인투1", "인투(집)", "인투1집", "지급임차료", "사택", "월세"])) {
     applyTalent("인투1 집", "인투1 집", includesAny(text, ["보증금"]) ? "사택 보증금" : "사택/운영공간 월세", "talent-1-house", "공통사용분", includesAny(text, ["보증금"]) ? "자산성" : "비용성");
-  } else if (includesAny(text, ["#인투2", "인투(차)", "법인차량", "리스료", "차량", "주유", "주차", "세차", "탁송", "고속도로", "도로공사", "통행료"])) {
+  } else if (includesAny(text, ["#인투2", "인투(차)", "인투2차", "법인차량", "리스료", "차량", "주유", "주차", "세차", "탁송", "고속도로", "도로공사", "통행료"])) {
     applyTalent("인투2 차", "인투2 차", includesAny(text, ["리스"]) ? "차량 리스료" : "차량 유지/교통", "talent-2-car");
-  } else if (includesAny(text, ["#인투3", "인투(밥)", "식대", "조식", "커피", "카페", "편의점", "간식", "한식", "복리후생비"])) {
+  } else if (includesAny(text, ["#인투3", "인투(밥)", "인투3밥", "식대", "조식", "커피", "카페", "편의점", "간식", "한식", "복리후생비"])) {
     applyTalent("인투3 밥", "인투3 밥", includesAny(text, ["커피", "카페"]) ? "커피/카페" : "식대/간식", "talent-3-meal");
-  } else if (includesAny(text, ["#인투4", "인투(몸)", "인투(돈)", "복지포인트", "일자리공제", "내일채움공제", "4대보험", "보험료"])) {
+  } else if (includesAny(text, ["#인투4", "인투(몸)", "인투(돈)", "인투4몸", "복지포인트", "일자리공제", "내일채움공제", "4대보험", "보험료"])) {
     applyTalent("인투4 몸", "인투4 몸", includesAny(text, ["4대보험", "보험료"]) ? "보험/공제" : "복지포인트/공제", "talent-4-welfare");
-  } else if (includesAny(text, ["#인투5", "인투(성장)", "플랫폼", "교육훈련비", "교육", "출장", "숙박", "여비교통비", "교통비", "구글", "openai", "gemini", "재미나이", "클링ai", "kling", "ai"])) {
+  } else if (includesAny(text, ["#인투5", "인투(성장)", "인투5성장", "플랫폼", "교육훈련비", "교육", "출장", "숙박", "여비교통비", "교통비", "구글", "openai", "gemini", "재미나이", "클링ai", "kling", "ai"])) {
     const isPlatform = includesAny(text, ["플랫폼", "구글", "openai", "gemini", "재미나이", "클링ai", "kling", "ai", "앱"]);
     applyTalent("인투5 성장", "인투5 성장", includesAny(text, ["출장", "숙박", "교통비", "고속도로"]) ? "출장/교통" : "플랫폼/교육", "talent-5-growth", isPlatform ? "플랫폼" : result.businessUnit === "미배분" ? "공통사용분" : result.businessUnit);
-  } else if (includesAny(text, ["#인투6", "인투(환경)", "환경용품", "소모품비", "사무용품", "도서인쇄비", "통신비", "공과금", "건물관리비", "전력비", "수도광열비", "인터넷", "정수기", "복사기", "보안"])) {
+  } else if (includesAny(text, ["#인투6", "인투(환경)", "인투6환경", "환경용품", "소모품비", "사무용품", "도서인쇄비", "통신비", "공과금", "건물관리비", "전력비", "수도광열비", "인터넷", "정수기", "복사기", "보안"])) {
     applyTalent("인투6 환경", "인투6 환경", includesAny(text, ["통신", "인터넷"]) ? "통신/인터넷" : "사무환경/소모품", "talent-6-environment");
   } else if (includesAny(text, ["직원급여", "급여", "사업소득", "인건비"])) {
     apply({
