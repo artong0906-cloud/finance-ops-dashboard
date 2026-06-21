@@ -48,6 +48,28 @@ type DbBalanceMovement = {
   memo: string | null;
 };
 
+async function fetchAllTransactions(admin: ReturnType<typeof createAdminClient>) {
+  const pageSize = 1000;
+  const rows: DbTransaction[] = [];
+
+  for (let from = 0; from < 10000; from += pageSize) {
+    const to = from + pageSize - 1;
+    const { data, error } = await admin
+      .from("transactions")
+      .select("*")
+      .order("transaction_date", { ascending: false })
+      .range(from, to);
+
+    if (error) return { data: rows, error };
+
+    const page = (data || []) as DbTransaction[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+
+  return { data: rows, error: null };
+}
+
 export type UploadBatchSummary = {
   id: string;
   uploadType: string;
@@ -145,11 +167,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       batchResult,
       rawRowResult
     ] = await Promise.all([
-      admin
-        .from("transactions")
-        .select("*")
-        .order("transaction_date", { ascending: false })
-        .limit(5000),
+      fetchAllTransactions(admin),
       admin
         .from("bank_account_master")
         .select("id,bank_name,account_name,account_no_masked,business_unit,purpose")
