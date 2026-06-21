@@ -1,20 +1,33 @@
 export const dynamic = "force-dynamic";
 
 import { AppShell } from "@/components/layout/AppShell";
-import { bankAccounts, transactions } from "@/data/mock";
-import { formatKRW } from "@/services/dashboard/calculations";
+import { formatKRW, sumBy } from "@/services/dashboard/calculations";
+import { getDashboardData } from "@/services/dashboard/liveData";
 
-export default function BankPage() {
+export default async function BankPage() {
+  const data = await getDashboardData();
+  const { bankAccounts, transactions } = data;
   const bankRows = transactions.filter((row) => row.source === "은행");
+  const accountNameById = new Map(bankAccounts.map((account) => [account.id, account.accountName]));
+  const accountRows = bankAccounts.map((account) => {
+    const rows = bankRows.filter((row) => row.accountId === account.id);
+    const cashIn = sumBy(rows.filter((row) => row.cashFlowType === "입금" && !row.isInternalTransfer), (row) => row.amount);
+    const cashOut = sumBy(rows.filter((row) => row.cashFlowType === "출금" && !row.isInternalTransfer), (row) => row.amount);
+    return { account, rows, cashIn, cashOut, net: cashIn - cashOut };
+  });
+
   return (
-    <AppShell title="통장 입출금" description="사업부별 운영통장을 기준으로 입금, 출금, 내부이체를 확인합니다.">
+    <AppShell title="통장 입출금" description="실제 업로드된 5월 은행 거래 기준으로 입금, 출금, 내부이체를 확인합니다." periodLabel={data.currentMonth || "2026-05"}>
       <section className="mb-6 grid grid-cols-4 gap-4 max-xl:grid-cols-2 max-md:grid-cols-1">
-        {bankAccounts.map((account) => (
+        {accountRows.map(({ account, rows, cashIn, cashOut, net }) => (
           <div className="card" key={account.id}>
             <div className="text-xs font-black text-slate-500">{account.businessUnit}</div>
             <div className="mt-2 font-black">{account.accountName}</div>
-            <div className="metric-value mt-3">{formatKRW(account.currentBalance)}</div>
-            <div className="mt-2 text-xs text-slate-500">{account.bankName} {account.maskedNo}</div>
+            <div className="metric-value mt-3">{formatKRW(net)}</div>
+            <div className="mt-2 text-xs leading-5 text-slate-500">
+              {account.bankName} {account.maskedNo}<br />
+              입금 {formatKRW(cashIn)} / 출금 {formatKRW(cashOut)} / {rows.length.toLocaleString("ko-KR")}건
+            </div>
           </div>
         ))}
       </section>
@@ -38,7 +51,7 @@ export default function BankPage() {
               {bankRows.map((row) => (
                 <tr key={row.id}>
                   <td>{row.date}</td>
-                  <td>{row.accountName}</td>
+                  <td>{row.accountId ? accountNameById.get(row.accountId) || row.accountId : "-"}</td>
                   <td>{row.businessUnit}</td>
                   <td><span className={row.isInternalTransfer ? "badge badge-warning" : "badge"}>{row.cashFlowType}</span></td>
                   <td>{row.vendor}</td>

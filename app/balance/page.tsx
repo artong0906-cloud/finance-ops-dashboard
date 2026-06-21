@@ -1,17 +1,19 @@
 export const dynamic = "force-dynamic";
 
 import { AppShell } from "@/components/layout/AppShell";
-import { balanceMovements } from "@/data/mock";
 import { endingAmount, formatKRW, sumBy } from "@/services/dashboard/calculations";
+import { getDashboardData } from "@/services/dashboard/liveData";
 
-export default function BalancePage() {
+export default async function BalancePage() {
+  const data = await getDashboardData();
+  const { balanceMovements } = data;
   const assets = balanceMovements.filter((row) => row.statementType === "자산");
   const liabilities = balanceMovements.filter((row) => row.statementType === "부채");
   const totalAssets = sumBy(assets, endingAmount);
   const totalLiabilities = sumBy(liabilities, endingAmount);
   const equity = totalAssets - totalLiabilities;
   return (
-    <AppShell title="자산/부채 현황" description="기초값에 당월 증가/감소를 반영하여 기말 잔액과 자본을 계산합니다.">
+    <AppShell title="자산/부채 현황" description="5월말 자산·부채 이미지와 로우데이터에서 입력한 증감표를 기준으로 계산합니다." periodLabel={data.currentMonth || "2026-05"}>
       <section className="mb-6 grid grid-cols-3 gap-4 max-md:grid-cols-1">
         <div className="card"><div className="eyebrow">총자산</div><div className="metric-value mt-3">{formatKRW(totalAssets)}</div></div>
         <div className="card"><div className="eyebrow">총부채</div><div className="metric-value mt-3">{formatKRW(totalLiabilities)}</div></div>

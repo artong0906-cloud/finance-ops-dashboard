@@ -1,13 +1,53 @@
 export const dynamic = "force-dynamic";
 
 import { AppShell } from "@/components/layout/AppShell";
-import { transactions } from "@/data/mock";
-import { formatKRW } from "@/services/dashboard/calculations";
+import { formatKRW, sumBy } from "@/services/dashboard/calculations";
+import { getDashboardData } from "@/services/dashboard/liveData";
 
-export default function CardsPage() {
+export default async function CardsPage() {
+  const data = await getDashboardData();
+  const { transactions } = data;
   const cardRows = transactions.filter((row) => row.source === "카드");
+  const total = sumBy(cardRows, (row) => row.amount);
+  const grouped = Array.from(
+    cardRows.reduce((acc, row) => {
+      const key = row.mainCategory || "미분류";
+      acc.set(key, (acc.get(key) || 0) + row.amount);
+      return acc;
+    }, new Map<string, number>())
+  ).sort((a, b) => b[1] - a[1]).slice(0, 6);
+
   return (
-    <AppShell title="카드 사용내역" description="법인카드 사용액은 분개 사업부를 최종 귀속 기준으로 관리합니다.">
+    <AppShell title="카드 사용내역" description="업로드된 5월 카드 로우데이터를 기준으로 사용액과 분류 결과를 확인합니다." periodLabel={data.currentMonth || "2026-05"}>
+      <section className="mb-6 grid grid-cols-4 gap-4 max-xl:grid-cols-2 max-md:grid-cols-1">
+        <div className="card">
+          <div className="eyebrow">카드 거래</div>
+          <div className="metric-value mt-3">{cardRows.length.toLocaleString("ko-KR")}건</div>
+        </div>
+        <div className="card">
+          <div className="eyebrow">카드 사용액</div>
+          <div className="metric-value mt-3">{formatKRW(total)}</div>
+        </div>
+        <div className="card">
+          <div className="eyebrow">확인필요</div>
+          <div className="metric-value mt-3">{cardRows.filter((row) => row.reviewStatus === "확인필요").length.toLocaleString("ko-KR")}건</div>
+        </div>
+        <div className="card">
+          <div className="eyebrow">5월 집계 기준</div>
+          <div className="metric-value mt-3">광고사업부</div>
+        </div>
+      </section>
+      <section className="card mb-6">
+        <h2 className="section-title mb-4">주요 분류별 사용액</h2>
+        <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
+          {grouped.map(([category, amount]) => (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4" key={category}>
+              <div className="text-xs font-black text-slate-500">{category}</div>
+              <div className="mt-2 text-lg font-black">{formatKRW(amount)}</div>
+            </div>
+          ))}
+        </div>
+      </section>
       <section className="card mb-6">
         <h2 className="section-title mb-4">카드 거래 상세</h2>
         <div className="table-wrap">
@@ -28,7 +68,7 @@ export default function CardsPage() {
               {cardRows.map((row) => (
                 <tr key={row.id}>
                   <td>{row.date}</td>
-                  <td>{row.cardBudgetGroup}</td>
+                  <td>{row.cardBudgetGroup || "-"}</td>
                   <td>{row.journalBusinessUnit || row.businessUnit}</td>
                   <td>{row.isCommonUse ? <span className="badge badge-warning">공통사용분</span> : <span className="badge badge-good">직접귀속</span>}</td>
                   <td>{row.vendor}</td>
@@ -44,8 +84,8 @@ export default function CardsPage() {
       <section className="card">
         <h2 className="section-title mb-3">운영 기준</h2>
         <p className="text-sm leading-7 text-slate-600">
-          공통사용분은 광고사업부 비용에서 제외하고 별도 표시합니다. 전체 회사 지출에는 포함하되, 사업부별 추정 손익 계산에서는
-          공통사용분 라인으로 분리합니다.
+          2026년 5월은 세부 사업부 기준 확정 전까지 입금과 출금을 광고사업부 기준으로 산정합니다.
+          6월 결산 기준을 받으면 사업부별 귀속 규칙을 다시 반영합니다.
         </p>
       </section>
     </AppShell>

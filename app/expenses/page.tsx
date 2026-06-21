@@ -1,15 +1,17 @@
 export const dynamic = "force-dynamic";
 
 import { AppShell } from "@/components/layout/AppShell";
-import { transactions } from "@/data/mock";
 import { formatKRW } from "@/services/dashboard/calculations";
+import { getDashboardData } from "@/services/dashboard/liveData";
 
-const expenseRows = transactions.filter((row) => row.cashFlowType === "출금" && !row.isInternalTransfer);
-const talentLabels = ["투자1 집", "투자2 차", "투자3 밥", "투자4 몸", "투자5 성장", "투자6 환경"];
+const talentLabels = ["인투1 집", "인투2 차", "인투3 밥", "인투4 몸", "인투5 성장", "인투6 환경"];
 
-export default function ExpensesPage() {
+export default async function ExpensesPage() {
+  const data = await getDashboardData();
+  const expenseRows = data.transactions.filter((row) => row.cashFlowType === "출금" && !row.isInternalTransfer);
+
   return (
-    <AppShell title="지출 분석" description="인재투자, 급여, 광고비, 운영비를 사업부별로 분석합니다.">
+    <AppShell title="지출 분석" description="업로드된 5월 거래 기준으로 인재투자, 급여, 광고비, 운영비를 분석합니다." periodLabel={data.currentMonth || "2026-05"}>
       <section className="mb-6 grid grid-cols-6 gap-3 max-xl:grid-cols-3 max-md:grid-cols-1">
         {talentLabels.map((label) => {
           const total = expenseRows.filter((row) => row.talentInvestmentType === label).reduce((sum, row) => sum + row.amount, 0);
@@ -17,10 +19,13 @@ export default function ExpensesPage() {
             <div className="card" key={label}>
               <div className="eyebrow">{label}</div>
               <div className="mt-2 text-lg font-black">{formatKRW(total)}</div>
-              <div className="mt-2 text-xs text-slate-500">상세 연결 예정</div>
+              <div className="mt-2 text-xs text-slate-500">{expenseRows.filter((row) => row.talentInvestmentType === label).length.toLocaleString("ko-KR")}건</div>
             </div>
           );
         })}
+      </section>
+      <section className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
+        2026년 5월은 사업부 세부 귀속 기준 확정 전까지 광고사업부 입금/출금으로 산정합니다. 분류 항목과 인재투자 유형은 유지합니다.
       </section>
       <section className="card">
         <h2 className="section-title mb-4">지출 상세</h2>

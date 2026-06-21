@@ -3,11 +3,24 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { LoginForm } from "./LoginForm";
 
-export default async function LoginPage() {
+function safeNext(value: unknown) {
+  return typeof value === "string" && value.startsWith("/") && !value.startsWith("//")
+    ? value
+    : "/dashboard";
+}
+
+export default async function LoginPage({
+  searchParams
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const next = safeNext(Array.isArray(params?.next) ? params?.next[0] : params?.next);
+
   try {
     const supabase = await createClient();
     const { data } = await supabase.auth.getUser();
-    if (data.user) redirect("/dashboard");
+    if (data.user) redirect(next);
   } catch {
     // Keep the login page renderable even before local env vars are configured.
   }

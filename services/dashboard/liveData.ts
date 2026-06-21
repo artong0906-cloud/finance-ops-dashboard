@@ -119,6 +119,22 @@ function toUiExpenseBasis(value: string | null | undefined, cashFlowType: string
   return cashFlowType === "출금" ? "비용" : "해당없음";
 }
 
+function applyTemporaryMayUnit(row: DbTransaction, transaction: Transaction): Transaction {
+  if (!row.transaction_date?.startsWith("2026-05")) return transaction;
+  if (transaction.cashFlowType !== "입금" && transaction.cashFlowType !== "출금") return transaction;
+
+  return {
+    ...transaction,
+    businessUnit: "광고사업부",
+    journalBusinessUnit: transaction.journalBusinessUnit === "미배분" ? undefined : transaction.journalBusinessUnit,
+    isCommonUse: false,
+    commonPolicy: undefined,
+    memo: transaction.memo
+      ? `${transaction.memo} / 2026-05 임시 집계: 광고사업부`
+      : "2026-05 임시 집계: 광고사업부"
+  };
+}
+
 function toTransaction(row: DbTransaction): Transaction {
   const firstPass = classifyFirstPass({
     source: row.source,
@@ -145,7 +161,7 @@ function toTransaction(row: DbTransaction): Transaction {
     || !row.detail_category
     || !row.expense_basis;
 
-  return {
+  const transaction: Transaction = {
     id: row.id,
     date: row.transaction_date,
     source: row.source || "업로드",
@@ -169,6 +185,8 @@ function toTransaction(row: DbTransaction): Transaction {
     memo: row.memo || (useFirstPass ? `1차분류: ${firstPass.matchedRule}` : undefined),
     reviewStatus: useFirstPass ? firstPass.reviewStatus : row.review_status || "확인필요"
   };
+
+  return applyTemporaryMayUnit(row, transaction);
 }
 
 function toBankAccount(row: DbBankAccount): BankAccount {

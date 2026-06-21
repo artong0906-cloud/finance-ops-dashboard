@@ -123,8 +123,8 @@ export async function AppShell({
                 <span className="h-2 w-2 rounded-full bg-emerald-500" />
                 운영
               </div>
-              <Link className="btn btn-soft" href="/prototype-v11.html" target="_blank">
-                원본 보기
+              <Link className="btn btn-soft" href="/dashboard">
+                실데이터 보기
               </Link>
               <Link href="/auth/logout" className="btn lg:hidden">
                 <LogOut size={15} />

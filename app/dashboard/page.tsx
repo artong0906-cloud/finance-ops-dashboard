@@ -107,7 +107,7 @@ export default async function DashboardPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/uploads" className="btn btn-primary">로우데이터 업로드</Link>
-          <Link href="/prototype-v11.html" className="btn btn-soft" target="_blank">프로토타입 보기</Link>
+          <Link href="/dashboard" className="btn btn-soft">실데이터 보기</Link>
         </div>
       </section>
 

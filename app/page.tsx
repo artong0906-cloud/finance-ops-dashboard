@@ -11,7 +11,7 @@ export default function HomePage() {
           <Link className="btn btn-primary" href="/dashboard">대시보드 열기</Link>
           <Link className="btn" href="/login">로그인</Link>
           <Link className="btn" href="/setup-admin">초기 관리자 생성</Link>
-          <Link className="btn" href="/prototype-v11.html" target="_blank">v11 원본 보기</Link>
+          <Link className="btn" href="/dashboard">실데이터 보기</Link>
         </div>
       </section>
     </main>
