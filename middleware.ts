@@ -11,12 +11,18 @@ const protectedPrefixes = [
   "/admin"
 ];
 
+function isLocalDesignReview(request: NextRequest) {
+  const host = request.nextUrl.hostname;
+  return process.env.NODE_ENV === "development" && (host === "127.0.0.1" || host === "localhost");
+}
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
   const pathname = request.nextUrl.pathname;
   const isProtected = protectedPrefixes.some((prefix) => pathname.startsWith(prefix));
 
   if (!isProtected) return response;
+  if (isLocalDesignReview(request)) return response;
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
