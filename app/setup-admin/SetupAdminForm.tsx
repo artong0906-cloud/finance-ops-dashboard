@@ -37,23 +37,23 @@ export function SetupAdminForm() {
     <form onSubmit={handleSubmit} className="mt-6 grid gap-4">
       <label className="grid gap-2 text-sm font-bold text-slate-700">
         초기 관리자 생성키
-        <input className="rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-blue-500" type="password" value={setupKey} onChange={(e) => setSetupKey(e.target.value)} required />
+        <input className="field" type="password" value={setupKey} onChange={(e) => setSetupKey(e.target.value)} required />
       </label>
       <label className="grid gap-2 text-sm font-bold text-slate-700">
         관리자 아이디
-        <input className="rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-blue-500" value={loginId} onChange={(e) => setLoginId(e.target.value)} required />
+        <input className="field" value={loginId} onChange={(e) => setLoginId(e.target.value)} required />
       </label>
       <label className="grid gap-2 text-sm font-bold text-slate-700">
         이름
-        <input className="rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-blue-500" value={name} onChange={(e) => setName(e.target.value)} required />
+        <input className="field" value={name} onChange={(e) => setName(e.target.value)} required />
       </label>
       <label className="grid gap-2 text-sm font-bold text-slate-700">
         초기 비밀번호
-        <input className="rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-blue-500" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="8자 이상" required />
+        <input className="field" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="8자 이상" required />
       </label>
       <button className="btn btn-primary w-full" type="submit" disabled={isLoading}>{isLoading ? "생성 중..." : "초기 관리자 생성"}</button>
-      {message ? <div className="rounded-2xl bg-green-50 border border-green-200 p-4 text-sm font-bold text-green-700">{message}</div> : null}
-      {error ? <div className="rounded-2xl bg-red-50 border border-red-200 p-4 text-sm font-bold text-red-700">{error}</div> : null}
+      {message ? <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-sm font-bold text-green-700">{message}</div> : null}
+      {error ? <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-sm font-bold text-red-700">{error}</div> : null}
     </form>
   );
 }

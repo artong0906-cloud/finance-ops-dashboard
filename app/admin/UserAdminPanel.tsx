@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { UserPlus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 type UserRow = {
@@ -92,22 +93,25 @@ export function UserAdminPanel() {
   return (
     <section className="grid grid-cols-[420px_minmax(0,1fr)] gap-4 max-xl:grid-cols-1">
       <div className="card">
-        <h2 className="text-xl font-black tracking-[-0.04em]">계정 생성</h2>
+        <h2 className="section-title">계정 생성</h2>
         <p className="text-sm text-slate-500 leading-6 mt-2">이메일 없이 아이디, 초기 비밀번호, 권한만 부여합니다.</p>
         <form onSubmit={handleSubmit} className="mt-5 grid gap-4">
-          <label className="grid gap-2 text-sm font-bold text-slate-700">아이디<input className="rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-blue-500" value={loginId} onChange={(e) => setLoginId(e.target.value)} placeholder="finance01" required /></label>
-          <label className="grid gap-2 text-sm font-bold text-slate-700">이름<input className="rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-blue-500" value={name} onChange={(e) => setName(e.target.value)} placeholder="경영지원 담당자" required /></label>
-          <label className="grid gap-2 text-sm font-bold text-slate-700">초기 비밀번호<input className="rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-blue-500" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="8자 이상" required /></label>
-          <label className="grid gap-2 text-sm font-bold text-slate-700">권한<select className="rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-blue-500" value={role} onChange={(e) => setRole(e.target.value as UserRow["role"])}><option value="admin">admin</option><option value="finance">finance</option><option value="executive">executive</option><option value="viewer">viewer</option></select></label>
-          <label className="grid gap-2 text-sm font-bold text-slate-700">상태<select className="rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-blue-500" value={status} onChange={(e) => setStatus(e.target.value as UserRow["status"])}><option value="active">active</option><option value="inactive">inactive</option></select></label>
-          <button className="btn btn-primary" disabled={isLoading}>{isLoading ? "생성 중..." : "계정 생성"}</button>
+          <label className="grid gap-2 text-sm font-bold text-slate-700">아이디<input className="field" value={loginId} onChange={(e) => setLoginId(e.target.value)} placeholder="finance01" required /></label>
+          <label className="grid gap-2 text-sm font-bold text-slate-700">이름<input className="field" value={name} onChange={(e) => setName(e.target.value)} placeholder="경영지원 담당자" required /></label>
+          <label className="grid gap-2 text-sm font-bold text-slate-700">초기 비밀번호<input className="field" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="8자 이상" required /></label>
+          <label className="grid gap-2 text-sm font-bold text-slate-700">권한<select className="field" value={role} onChange={(e) => setRole(e.target.value as UserRow["role"])}><option value="admin">admin</option><option value="finance">finance</option><option value="executive">executive</option><option value="viewer">viewer</option></select></label>
+          <label className="grid gap-2 text-sm font-bold text-slate-700">상태<select className="field" value={status} onChange={(e) => setStatus(e.target.value as UserRow["status"])}><option value="active">active</option><option value="inactive">inactive</option></select></label>
+          <button className="btn btn-primary" disabled={isLoading}>
+            <UserPlus size={15} />
+            {isLoading ? "생성 중..." : "계정 생성"}
+          </button>
         </form>
-        {message ? <div className="mt-4 rounded-2xl bg-green-50 border border-green-200 p-4 text-sm font-bold text-green-700">{message}</div> : null}
-        {error ? <div className="mt-4 rounded-2xl bg-red-50 border border-red-200 p-4 text-sm font-bold text-red-700">{error}</div> : null}
+        {message ? <div className="mt-4 rounded-lg bg-green-50 border border-green-200 p-4 text-sm font-bold text-green-700">{message}</div> : null}
+        {error ? <div className="mt-4 rounded-lg bg-red-50 border border-red-200 p-4 text-sm font-bold text-red-700">{error}</div> : null}
       </div>
 
       <div className="card">
-        <h2 className="text-xl font-black tracking-[-0.04em] mb-4">사용자 목록</h2>
+        <h2 className="section-title mb-4">사용자 목록</h2>
         <div className="table-wrap">
           <table>
             <thead><tr><th>아이디</th><th>이름</th><th>권한</th><th>상태</th><th>생성일</th></tr></thead>

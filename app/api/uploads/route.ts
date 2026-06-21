@@ -1,10 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { getApiUser } from "@/lib/auth/api";
+import { canUpload } from "@/lib/auth/roles";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizeUploadRows, type UploadType } from "@/services/uploads/normalize";
 
 const uploadTypes = ["bank", "card", "pharos", "balance"] as const;
-type UserRole = "admin" | "finance" | "executive" | "viewer";
 
 type UploadPayload = {
   uploadType?: UploadType;
@@ -12,55 +12,6 @@ type UploadPayload = {
   headers?: string[];
   rows?: Record<string, string>[];
 };
-
-async function getAuthenticatedEmail(request: NextRequest) {
-  const authorization = request.headers.get("authorization");
-  const token = authorization?.replace(/^Bearer\s+/i, "").trim();
-
-  if (token) {
-    const admin = createAdminClient();
-    const { data, error } = await admin.auth.getUser(token);
-    if (!error && data.user?.email) return data.user.email;
-  }
-
-  // Same-origin API calls can rely on Supabase session cookies.
-  // This fallback prevents the upload save API from failing when the browser client
-  // has a valid cookie session but does not expose an access token to getSession().
-  try {
-    const supabase = await createClient();
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (!authError && authData.user?.email) return authData.user.email;
-  } catch {
-    // Fall through to the standard unauthenticated response below.
-  }
-
-  return null;
-}
-
-async function getProfile(request: NextRequest) {
-  const email = await getAuthenticatedEmail(request);
-  if (!email) {
-    return { ok: false as const, response: NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 }) };
-  }
-
-  const admin = createAdminClient();
-  const { data: profile, error } = await admin
-    .from("allowed_users")
-    .select("email,login_id,name,role,status")
-    .eq("email", email)
-    .eq("status", "active")
-    .maybeSingle<{ email: string; login_id: string | null; name: string | null; role: UserRole; status: string }>();
-
-  if (error || !profile) {
-    return { ok: false as const, response: NextResponse.json({ error: "활성 사용자 권한이 없습니다." }, { status: 403 }) };
-  }
-
-  return { ok: true as const, profile };
-}
-
-function assertUploaderRole(role: UserRole) {
-  return role === "admin" || role === "finance";
-}
 
 function safeRows(rows: unknown) {
   if (!Array.isArray(rows)) return [];
@@ -82,7 +33,7 @@ async function tableExists(admin: any, tableName: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const profileResult = await getProfile(request);
+  const profileResult = await getApiUser(request);
   if (!profileResult.ok) return profileResult.response;
 
   const admin = createAdminClient();
@@ -132,10 +83,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const profileResult = await getProfile(request);
+  const profileResult = await getApiUser(request);
   if (!profileResult.ok) return profileResult.response;
 
-  if (!assertUploaderRole(profileResult.profile.role)) {
+  if (!canUpload(profileResult.profile.role)) {
     return NextResponse.json({ error: "업로드는 admin 또는 finance 권한만 가능합니다." }, { status: 403 });
   }
 

@@ -33,3 +33,9 @@
 
 - Fixed TypeScript strict build failure in `services/uploads/parse.ts` by explicitly typing the PapaParse error callback parameter.
 - Keeps v4.1 bank preview parsing and v4.2 upload auth session fixes.
+
+## v4.5 Deployment merge
+
+- Merged dashboard UI shell changes from PR #3 with upload-save auth fixes from PR #1.
+- Added stable unauthenticated landing/login card sizing for deployment preview checks.
+- See `docs/DEPLOYMENT_CHECKLIST.md` before connecting GitHub and Vercel.

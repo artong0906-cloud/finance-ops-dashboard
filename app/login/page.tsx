@@ -14,9 +14,9 @@ export default async function LoginPage() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-6">
-      <section className="card max-w-md w-full">
+      <section className="card center-card-md">
         <div className="text-sm font-black text-blue-700 mb-3">FinanceOps Login</div>
-        <h1 className="text-3xl font-black tracking-[-0.05em]">아이디 로그인</h1>
+        <h1 className="text-2xl font-black">아이디 로그인</h1>
         <p className="mt-3 text-sm text-slate-500 leading-6">
           관리자가 생성한 아이디와 비밀번호로 접속합니다. 이메일 링크 로그인은 사용하지 않습니다.
         </p>
