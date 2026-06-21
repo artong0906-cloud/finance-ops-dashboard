@@ -94,8 +94,8 @@ export async function AppShell({
                   <div className="mt-1 text-slate-500">집계월</div>
                 </div>
                 <div>
-                  <div className="font-black text-slate-900">검증대기</div>
-                  <div className="mt-1 text-slate-500">업로드 상태</div>
+                  <div className="font-black text-slate-900">실데이터</div>
+                  <div className="mt-1 text-slate-500">화면 기준</div>
                 </div>
               </div>
             </div>
