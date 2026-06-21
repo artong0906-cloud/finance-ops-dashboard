@@ -16,12 +16,66 @@ type TalentSummary = {
   share: number;
 };
 
+type ResolvedExpenseRow = {
+  row: Transaction;
+  talentType?: string;
+};
+
 function sumAmount(rows: Transaction[]) {
   return rows.reduce((sum, row) => sum + row.amount, 0);
 }
 
+function sumResolvedAmount(rows: ResolvedExpenseRow[]) {
+  return rows.reduce((sum, { row }) => sum + row.amount, 0);
+}
+
 function formatPercent(value: number) {
   return `${Math.round(value)}%`;
+}
+
+function normalizeTalentText(value: string | undefined) {
+  return (value || "")
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[()[\]{}#·._-]/g, "");
+}
+
+function includesAny(text: string, keywords: string[]) {
+  return keywords.some((keyword) => text.includes(normalizeTalentText(keyword)));
+}
+
+function resolveTalentType(row: Transaction) {
+  const categoryText = normalizeTalentText([
+    row.talentInvestmentType,
+    row.mainCategory,
+    row.subCategory,
+    row.detailCategory
+  ].filter(Boolean).join(" "));
+  const fullText = normalizeTalentText([
+    row.talentInvestmentType,
+    row.mainCategory,
+    row.subCategory,
+    row.detailCategory,
+    row.vendor,
+    row.description,
+    row.memo
+  ].filter(Boolean).join(" "));
+
+  if (includesAny(categoryText, ["인투1", "투자1", "인재투자1", "인투집", "투자집", "사택", "월세", "지급임차료"])) return "인투1 집";
+  if (includesAny(categoryText, ["인투2", "투자2", "인재투자2", "인투차", "투자차", "법인차량", "차량", "리스료", "주유", "주차", "통행료"])) return "인투2 차";
+  if (includesAny(categoryText, ["인투3", "투자3", "인재투자3", "인투밥", "투자밥", "식대", "간식", "커피", "카페", "편의점"])) return "인투3 밥";
+  if (includesAny(categoryText, ["인투4", "투자4", "인재투자4", "인투몸", "투자몸", "복지포인트", "내일채움", "일자리공제", "4대보험", "보험료"])) return "인투4 몸";
+  if (includesAny(categoryText, ["인투5", "투자5", "인재투자5", "인투성장", "투자성장", "교육", "출장", "숙박", "플랫폼", "openai", "gemini", "kling", "ai"])) return "인투5 성장";
+  if (includesAny(categoryText, ["인투6", "투자6", "인재투자6", "인투환경", "투자환경", "사무용품", "소모품", "통신비", "공과금", "전력비", "인터넷", "정수기", "보안"])) return "인투6 환경";
+
+  if (includesAny(fullText, ["인투1", "투자1", "인재투자1", "사택", "월세", "지급임차료"])) return "인투1 집";
+  if (includesAny(fullText, ["인투2", "투자2", "인재투자2", "법인차량", "차량리스", "리스료", "주유", "주차", "통행료", "고속도로"])) return "인투2 차";
+  if (includesAny(fullText, ["인투3", "투자3", "인재투자3", "식대", "간식", "커피", "카페", "편의점", "한식"])) return "인투3 밥";
+  if (includesAny(fullText, ["인투4", "투자4", "인재투자4", "복지포인트", "내일채움", "일자리공제", "4대보험", "보험료"])) return "인투4 몸";
+  if (includesAny(fullText, ["인투5", "투자5", "인재투자5", "교육훈련", "교육", "출장", "숙박", "플랫폼", "openai", "gemini", "kling", "클링", "재미나이"])) return "인투5 성장";
+  if (includesAny(fullText, ["인투6", "투자6", "인재투자6", "환경용품", "사무용품", "소모품", "통신비", "공과금", "전력비", "인터넷", "정수기", "보안"])) return "인투6 환경";
+
+  return undefined;
 }
 
 function splitTalentLabel(label: string) {
@@ -36,20 +90,24 @@ export function ExpenseAnalysisClient({ expenseRows }: { expenseRows: Transactio
   const [activeFilter, setActiveFilter] = useState<TalentFilter>(allFilter);
 
   const totalAmount = useMemo(() => sumAmount(expenseRows), [expenseRows]);
-  const talentRows = useMemo(
-    () => expenseRows.filter((row) => talentLabels.includes(row.talentInvestmentType || "")),
+  const resolvedRows = useMemo<ResolvedExpenseRow[]>(
+    () => expenseRows.map((row) => ({ row, talentType: resolveTalentType(row) })),
     [expenseRows]
   );
-  const talentTotal = useMemo(() => sumAmount(talentRows), [talentRows]);
+  const talentRows = useMemo(
+    () => resolvedRows.filter((item) => talentLabels.includes(item.talentType || "")),
+    [resolvedRows]
+  );
+  const talentTotal = useMemo(() => sumResolvedAmount(talentRows), [talentRows]);
   const filteredRows = useMemo(() => {
-    if (activeFilter === allFilter) return expenseRows;
-    return expenseRows.filter((row) => row.talentInvestmentType === activeFilter);
-  }, [activeFilter, expenseRows]);
-  const filteredTotal = useMemo(() => sumAmount(filteredRows), [filteredRows]);
+    if (activeFilter === allFilter) return resolvedRows;
+    return resolvedRows.filter((item) => item.talentType === activeFilter);
+  }, [activeFilter, resolvedRows]);
+  const filteredTotal = useMemo(() => sumResolvedAmount(filteredRows), [filteredRows]);
   const summaries = useMemo<TalentSummary[]>(
     () => talentLabels.map((label) => {
-      const rows = expenseRows.filter((row) => row.talentInvestmentType === label);
-      const amount = sumAmount(rows);
+      const rows = resolvedRows.filter((item) => item.talentType === label);
+      const amount = sumResolvedAmount(rows);
 
       return {
         label,
@@ -58,7 +116,7 @@ export function ExpenseAnalysisClient({ expenseRows }: { expenseRows: Transactio
         share: talentTotal > 0 ? (amount / talentTotal) * 100 : 0
       };
     }),
-    [expenseRows, talentTotal]
+    [resolvedRows, talentTotal]
   );
 
   return (
@@ -179,10 +237,10 @@ export function ExpenseAnalysisClient({ expenseRows }: { expenseRows: Transactio
                 </tr>
               </thead>
               <tbody>
-                {filteredRows.map((row) => (
+                {filteredRows.map(({ row, talentType }) => (
                   <tr key={row.id}>
                     <td>{row.date}</td>
-                    <td>{row.talentInvestmentType ? <span className="badge">{row.talentInvestmentType}</span> : <span className="badge badge-muted">미지정</span>}</td>
+                    <td>{talentType ? <span className="badge">{talentType}</span> : <span className="badge badge-muted">미지정</span>}</td>
                     <td>{row.businessUnit}</td>
                     <td>{row.source}</td>
                     <td>{row.mainCategory}</td>
