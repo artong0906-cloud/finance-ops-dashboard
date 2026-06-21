@@ -17,11 +17,11 @@ import { getAllowedUser } from "@/lib/auth/session";
 
 const nav: { href: string; label: string; kicker: string; icon: LucideIcon }[] = [
   { href: "/dashboard", label: "경영현황", kicker: "Overview", icon: Gauge },
-  { href: "/bank", label: "은행 입출금", kicker: "Cash", icon: Landmark },
+  { href: "/bank", label: "통장 입출금", kicker: "Cash", icon: Landmark },
   { href: "/cards", label: "카드 사용내역", kicker: "Cards", icon: CreditCard },
   { href: "/expenses", label: "지출 분석", kicker: "Expense", icon: BarChart3 },
-  { href: "/balance", label: "자산·부채", kicker: "Balance", icon: WalletCards },
-  { href: "/uploads", label: "업로드·검증", kicker: "Review", icon: FileUp },
+  { href: "/balance", label: "자산/부채", kicker: "Balance", icon: WalletCards },
+  { href: "/uploads", label: "업로드 검증", kicker: "Review", icon: FileUp },
   { href: "/admin", label: "관리자", kicker: "Admin", icon: Settings }
 ];
 
@@ -39,7 +39,7 @@ export async function AppShell({ title, description, children }: { title: string
             </span>
             <span>
               <span className="block text-base font-black">광고인 FinanceOps</span>
-              <span className="block text-xs font-bold text-slate-500">Internal dashboard</span>
+              <span className="block text-xs font-bold text-slate-500">경영지원 대시보드</span>
             </span>
           </Link>
 
@@ -81,7 +81,7 @@ export async function AppShell({ title, description, children }: { title: string
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                 <div>
                   <div className="font-black text-slate-900">2026.06</div>
-                  <div className="mt-1 text-slate-500">기준월</div>
+                  <div className="mt-1 text-slate-500">집계월</div>
                 </div>
                 <div>
                   <div className="font-black text-slate-900">검증대기</div>
