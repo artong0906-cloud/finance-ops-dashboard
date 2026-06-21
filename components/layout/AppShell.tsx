@@ -25,7 +25,17 @@ const nav: { href: string; label: string; kicker: string; icon: LucideIcon }[] =
   { href: "/admin", label: "관리자", kicker: "Admin", icon: Settings }
 ];
 
-export async function AppShell({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+export async function AppShell({
+  title,
+  description,
+  periodLabel = "2026-05",
+  children
+}: {
+  title: string;
+  description?: string;
+  periodLabel?: string;
+  children: React.ReactNode;
+}) {
   const { profile } = await getAllowedUser();
   const displayName = profile.name || profile.login_id || profile.email || "사용자";
 
@@ -80,7 +90,7 @@ export async function AppShell({ title, description, children }: { title: string
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <div className="font-black text-slate-900">2026.06</div>
+                  <div className="font-black text-slate-900">{periodLabel}</div>
                   <div className="mt-1 text-slate-500">집계월</div>
                 </div>
                 <div>
@@ -103,7 +113,7 @@ export async function AppShell({ title, description, children }: { title: string
             <div className="min-w-0">
               <div className="mb-1 flex flex-wrap items-center gap-2">
                 <span className="badge badge-muted">FinanceOps</span>
-                <span className="badge">2026.06</span>
+                <span className="badge">{periodLabel}</span>
               </div>
               <h1 className="text-2xl font-black text-slate-950">{title}</h1>
               {description ? <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{description}</p> : null}

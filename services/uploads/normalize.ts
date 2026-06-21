@@ -1,15 +1,24 @@
+import { classifyFirstPass, type BusinessUnitValue, type ExpenseBasisValue } from "@/services/classification/firstPass";
+
 export type UploadType = "bank" | "card" | "pharos" | "balance";
 
 export type NormalizedTransaction = {
   transaction_date: string;
   source: "은행" | "카드" | "파로스" | "수기입력";
-  business_unit: "광고사업부" | "플랫폼" | "대외협력" | "공통사용분" | "미배분";
+  business_unit: BusinessUnitValue;
+  account_id?: string | null;
   vendor: string | null;
   description: string | null;
   amount: number;
   cash_flow_type: "입금" | "출금" | "내부이체" | "제외";
   main_category: string | null;
   sub_category: string | null;
+  detail_category?: string | null;
+  talent_investment_type?: string | null;
+  expense_basis?: ExpenseBasisValue | null;
+  is_internal_transfer?: boolean;
+  is_common_use?: boolean;
+  common_policy?: string | null;
   review_status: "정상" | "확인필요" | "보류" | "확정";
   memo: string | null;
 };
@@ -155,20 +164,42 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
     if (!description) missing.push("적요/거래처");
 
     const parseStatus = missing.length === 0 ? "정상" : "확인필요";
+    const baseMemo = inferMemo(missing);
+    const source = sourceByType(uploadType);
+    const firstPass = classifyFirstPass({
+      source,
+      businessUnit,
+      vendor,
+      description,
+      amount,
+      cashFlowType,
+      mainCategory,
+      subCategory,
+      memo: baseMemo
+    });
+    const autoMemo = `1차분류: ${firstPass.matchedRule}`;
+    const memo = [baseMemo, autoMemo].filter(Boolean).join(" / ") || null;
 
     const transaction = transactionDate && amount
       ? {
           transaction_date: transactionDate,
-          source: sourceByType(uploadType),
-          business_unit: businessUnit,
+          source,
+          business_unit: firstPass.businessUnit,
+          account_id: firstPass.accountId || null,
           vendor,
           description,
           amount,
           cash_flow_type: cashFlowType,
-          main_category: mainCategory,
-          sub_category: subCategory,
-          review_status: parseStatus === "정상" ? ("확인필요" as const) : ("확인필요" as const),
-          memo: inferMemo(missing)
+          main_category: firstPass.mainCategory,
+          sub_category: firstPass.subCategory,
+          detail_category: firstPass.detailCategory,
+          talent_investment_type: firstPass.talentInvestmentType || null,
+          expense_basis: firstPass.expenseBasis,
+          is_internal_transfer: firstPass.isInternalTransfer,
+          is_common_use: firstPass.isCommonUse,
+          common_policy: firstPass.commonPolicy || null,
+          review_status: parseStatus === "정상" ? firstPass.reviewStatus : ("확인필요" as const),
+          memo
         }
       : null;
 
@@ -181,12 +212,17 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
         description,
         amount,
         cash_flow_type: cashFlowType,
-        business_unit: businessUnit,
-        main_category: mainCategory,
-        sub_category: subCategory
+        business_unit: firstPass.businessUnit,
+        main_category: firstPass.mainCategory,
+        sub_category: firstPass.subCategory,
+        detail_category: firstPass.detailCategory,
+        talent_investment_type: firstPass.talentInvestmentType || null,
+        expense_basis: firstPass.expenseBasis,
+        review_status: firstPass.reviewStatus,
+        matched_rule: firstPass.matchedRule
       },
       parseStatus,
-      memo: inferMemo(missing),
+      memo,
       transaction
     };
   });

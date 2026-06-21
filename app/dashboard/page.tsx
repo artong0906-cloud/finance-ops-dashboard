@@ -91,7 +91,8 @@ export default async function DashboardPage() {
   return (
     <AppShell
       title="경영현황 대시보드"
-      description="업로드된 로우데이터를 기준으로 입금, 출금, 순현금흐름, 미배분 거래를 먼저 확인하고 화면 구조를 다듬습니다."
+      description="업로드된 로우데이터를 기준으로 입금, 출금, 순현금흐름, 자동분류 결과를 확인하고 화면 구조를 다듬습니다."
+      periodLabel={data.currentMonth || "2026-05"}
     >
       <section className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4">
         <div>
@@ -100,7 +101,7 @@ export default async function DashboardPage() {
           </div>
           <div className="mt-1 text-sm leading-6 text-blue-800">
             {data.mode === "live"
-              ? `Supabase 업로드 데이터 ${transactions.length.toLocaleString("ko-KR")}건을 기준으로 집계 중입니다.`
+              ? `Supabase 업로드 데이터 ${transactions.length.toLocaleString("ko-KR")}건을 ${data.currentMonth || "최신 월"} 기준으로 집계 중입니다.`
               : "아직 읽을 수 있는 업로드 거래가 없어 샘플 데이터로 화면을 보여줍니다."}
           </div>
         </div>
@@ -352,7 +353,7 @@ export default async function DashboardPage() {
       </section>
 
       <section className="mt-5 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
-        다음 작업은 미배분 거래를 자동 분류하는 규칙입니다. 거래처/적요 키워드를 기준으로 사업부, 비용/자산, 대분류를 채우면 이 화면의 결과값이 바로 바뀝니다.
+        현재 화면은 스킬 폴더의 경비보고서 분류 기준을 1차 적용합니다. 남는 확인필요 항목은 거래처/적요 예외 규칙을 추가하면서 줄여갑니다.
       </section>
     </AppShell>
   );

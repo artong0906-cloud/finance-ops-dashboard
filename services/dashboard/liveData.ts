@@ -1,5 +1,6 @@
 import { bankAccounts as mockBankAccounts, balanceMovements as mockBalanceMovements, transactions as mockTransactions } from "@/data/mock";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { classifyFirstPass } from "@/services/classification/firstPass";
 import type { BalanceMovement, BankAccount, Transaction } from "@/types/finance";
 
 type DbTransaction = {
@@ -90,6 +91,7 @@ export type RawRowSample = {
 
 export type DashboardData = {
   mode: "live" | "mock";
+  currentMonth: string | null;
   transactions: Transaction[];
   bankAccounts: BankAccount[];
   balanceMovements: BalanceMovement[];
@@ -103,30 +105,69 @@ function toNumber(value: number | string | null | undefined) {
   return Number.isFinite(next) ? next : 0;
 }
 
+function getLatestMonth(rows: DbTransaction[]) {
+  return rows
+    .map((row) => row.transaction_date?.slice(0, 7))
+    .filter((month): month is string => Boolean(month))
+    .sort((a, b) => b.localeCompare(a))[0] || null;
+}
+
+function toUiExpenseBasis(value: string | null | undefined, cashFlowType: string) {
+  if (value === "자산성" || value === "자산") return "자산";
+  if (value === "비용성" || value === "비용") return "비용";
+  if (value === "해당없음") return "해당없음";
+  return cashFlowType === "출금" ? "비용" : "해당없음";
+}
+
 function toTransaction(row: DbTransaction): Transaction {
+  const firstPass = classifyFirstPass({
+    source: row.source,
+    businessUnit: row.business_unit,
+    accountId: row.account_id,
+    cardBudgetGroup: row.card_budget_group,
+    vendor: row.vendor,
+    description: row.description,
+    amount: row.amount,
+    cashFlowType: row.cash_flow_type,
+    mainCategory: row.main_category,
+    subCategory: row.sub_category,
+    detailCategory: row.detail_category,
+    talentInvestmentType: row.talent_investment_type,
+    expenseBasis: row.expense_basis,
+    isInternalTransfer: row.is_internal_transfer,
+    isCommonUse: row.is_common_use,
+    commonPolicy: row.common_policy,
+    reviewStatus: row.review_status,
+    memo: row.memo
+  });
+  const useFirstPass = row.business_unit === "미배분"
+    || row.review_status === "확인필요"
+    || !row.detail_category
+    || !row.expense_basis;
+
   return {
     id: row.id,
     date: row.transaction_date,
     source: row.source || "업로드",
-    businessUnit: row.business_unit || "미배분",
-    accountId: row.account_id || undefined,
+    businessUnit: useFirstPass ? firstPass.businessUnit : row.business_unit || "미배분",
+    accountId: row.account_id || firstPass.accountId || undefined,
     cardBudgetGroup: row.card_budget_group || undefined,
     vendor: row.vendor || "-",
     description: row.description || row.vendor || "-",
     amount: toNumber(row.amount),
     cashFlowType: row.cash_flow_type || "제외",
-    mainCategory: row.main_category || "미분류",
-    subCategory: row.sub_category || "미분류",
-    detailCategory: row.detail_category || "미분류",
-    talentInvestmentType: row.talent_investment_type || undefined,
-    expenseBasis: row.expense_basis || (row.cash_flow_type === "출금" ? "비용" : "해당없음"),
-    isInternalTransfer: Boolean(row.is_internal_transfer),
-    isCommonUse: Boolean(row.is_common_use),
-    commonPolicy: row.common_policy || undefined,
+    mainCategory: useFirstPass ? firstPass.mainCategory : row.main_category || "미분류",
+    subCategory: useFirstPass ? firstPass.subCategory : row.sub_category || "미분류",
+    detailCategory: useFirstPass ? firstPass.detailCategory : row.detail_category || "미분류",
+    talentInvestmentType: useFirstPass ? firstPass.talentInvestmentType : row.talent_investment_type || undefined,
+    expenseBasis: toUiExpenseBasis(useFirstPass ? firstPass.expenseBasis : row.expense_basis, row.cash_flow_type),
+    isInternalTransfer: useFirstPass ? firstPass.isInternalTransfer : Boolean(row.is_internal_transfer),
+    isCommonUse: useFirstPass ? firstPass.isCommonUse : Boolean(row.is_common_use),
+    commonPolicy: (useFirstPass ? firstPass.commonPolicy : row.common_policy) || undefined,
     journalStatus: row.journal_status || undefined,
     journalBusinessUnit: row.journal_business_unit || undefined,
-    memo: row.memo || undefined,
-    reviewStatus: row.review_status || "확인필요"
+    memo: row.memo || (useFirstPass ? `1차분류: ${firstPass.matchedRule}` : undefined),
+    reviewStatus: useFirstPass ? firstPass.reviewStatus : row.review_status || "확인필요"
   };
 }
 
@@ -193,6 +234,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     if (transactionResult.error || dbTransactions.length === 0) {
       return {
         mode: "mock",
+        currentMonth: null,
         transactions: mockTransactions,
         bankAccounts: mockBankAccounts,
         balanceMovements: mockBalanceMovements,
@@ -202,15 +244,25 @@ export async function getDashboardData(): Promise<DashboardData> {
       };
     }
 
+    const currentMonth = getLatestMonth(dbTransactions);
+    const currentTransactions = currentMonth
+      ? dbTransactions.filter((row) => row.transaction_date?.startsWith(currentMonth))
+      : dbTransactions;
+    const dbBalanceMovements = (balanceResult.data || []) as DbBalanceMovement[];
+    const currentBalanceMovements = currentMonth
+      ? dbBalanceMovements.filter((row) => row.month === currentMonth)
+      : dbBalanceMovements;
+
     const countResult = await admin
       .from("upload_raw_rows")
       .select("id", { count: "exact", head: true });
 
     return {
       mode: "live",
-      transactions: dbTransactions.map(toTransaction),
+      currentMonth,
+      transactions: currentTransactions.map(toTransaction),
       bankAccounts: ((bankResult.data || []) as DbBankAccount[]).map(toBankAccount),
-      balanceMovements: ((balanceResult.data || []) as DbBalanceMovement[]).map(toBalanceMovement),
+      balanceMovements: (currentBalanceMovements.length > 0 ? currentBalanceMovements : dbBalanceMovements).map(toBalanceMovement),
       uploadBatches: ((batchResult.data || []) as Record<string, string | null>[]).map((row) => ({
         id: String(row.id),
         uploadType: String(row.upload_type || ""),
@@ -232,6 +284,7 @@ export async function getDashboardData(): Promise<DashboardData> {
   } catch {
     return {
       mode: "mock",
+      currentMonth: null,
       transactions: mockTransactions,
       bankAccounts: mockBankAccounts,
       balanceMovements: mockBalanceMovements,
