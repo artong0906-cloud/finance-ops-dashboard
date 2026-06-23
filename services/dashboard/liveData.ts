@@ -49,6 +49,13 @@ type DbBalanceMovement = {
   memo: string | null;
 };
 
+type DbRawUploadRow = {
+  upload_batch_id: string;
+  row_index: number;
+  raw_data: Record<string, unknown> | null;
+  normalized_data: Record<string, unknown> | null;
+};
+
 async function fetchAllTransactions(admin: ReturnType<typeof createAdminClient>) {
   const pageSize = 1000;
   const rows: DbTransaction[] = [];
@@ -69,6 +76,31 @@ async function fetchAllTransactions(admin: ReturnType<typeof createAdminClient>)
   }
 
   return { data: rows, error: null };
+}
+
+async function fetchAllRawRowsForBatches(admin: ReturnType<typeof createAdminClient>, batchIds: string[]) {
+  if (batchIds.length === 0) return [] as DbRawUploadRow[];
+
+  const pageSize = 1000;
+  const rows: DbRawUploadRow[] = [];
+
+  for (let from = 0; from < 10000; from += pageSize) {
+    const to = from + pageSize - 1;
+    const { data, error } = await admin
+      .from("upload_raw_rows")
+      .select("upload_batch_id,row_index,raw_data,normalized_data")
+      .in("upload_batch_id", batchIds)
+      .order("row_index", { ascending: true })
+      .range(from, to);
+
+    if (error) return rows;
+
+    const page = (data || []) as DbRawUploadRow[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+
+  return rows;
 }
 
 export type UploadBatchSummary = {
@@ -103,6 +135,100 @@ export type DashboardData = {
 function toNumber(value: number | string | null | undefined) {
   const next = Number(value || 0);
   return Number.isFinite(next) ? next : 0;
+}
+
+function compactLookup(value: unknown) {
+  return String(value ?? "").replace(/\s+/g, "").toLowerCase();
+}
+
+function readRecordValue(record: Record<string, unknown>, keys: string[]) {
+  const entries = Object.entries(record);
+  const targets = keys.map(compactLookup);
+
+  for (const target of targets) {
+    const exact = entries.find(([key]) => compactLookup(key) === target);
+    if (exact && exact[1]) return String(exact[1]).trim();
+  }
+
+  for (const target of targets) {
+    const partial = entries.find(([key, value]) => {
+      const normalizedKey = compactLookup(key);
+      return value && (normalizedKey.includes(target) || target.includes(normalizedKey));
+    });
+    if (partial) return String(partial[1]).trim();
+  }
+
+  return "";
+}
+
+function toLookupRecord(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+const rawCardIssuerKeys = ["카드사", "카드회사", "카드사/사용자", "card_budget_group"];
+const rawVendorKeys = ["거래처", "가맹점명", "사용처", "상호", "업체명", "vendor"];
+const rawDescriptionKeys = ["거래적요", "적요", "거래내용", "내용", "메모", "description"];
+
+function transactionLookupKey(input: {
+  date?: unknown;
+  amount?: unknown;
+  cashFlowType?: unknown;
+  vendor?: unknown;
+  description?: unknown;
+}) {
+  const date = String(input.date || "").slice(0, 10);
+  const amount = Math.round(Math.abs(toNumber(input.amount as number | string | null | undefined)));
+  if (!date || !amount) return "";
+
+  return [
+    date,
+    amount,
+    compactLookup(input.cashFlowType),
+    compactLookup(input.vendor),
+    compactLookup(input.description)
+  ].join("|");
+}
+
+function buildCardIssuerLookup(rawRows: DbRawUploadRow[]) {
+  const lookup = new Map<string, string[]>();
+
+  rawRows.forEach((rawRow) => {
+    const rawData = toLookupRecord(rawRow.raw_data);
+    const normalizedData = toLookupRecord(rawRow.normalized_data);
+    const cardIssuer = readRecordValue(rawData, rawCardIssuerKeys);
+    if (!cardIssuer) return;
+
+    const key = transactionLookupKey({
+      date: normalizedData.transaction_date,
+      amount: normalizedData.amount,
+      cashFlowType: normalizedData.cash_flow_type || "출금",
+      vendor: normalizedData.vendor || readRecordValue(rawData, rawVendorKeys),
+      description: normalizedData.description || readRecordValue(rawData, rawDescriptionKeys)
+    });
+    if (!key) return;
+
+    const current = lookup.get(key) || [];
+    current.push(cardIssuer);
+    lookup.set(key, current);
+  });
+
+  return lookup;
+}
+
+function consumeCardIssuer(row: DbTransaction, lookup?: Map<string, string[]>) {
+  if (!lookup || row.source !== "카드") return undefined;
+
+  const key = transactionLookupKey({
+    date: row.transaction_date,
+    amount: row.amount,
+    cashFlowType: row.cash_flow_type,
+    vendor: row.vendor,
+    description: row.description
+  });
+  const values = key ? lookup.get(key) : undefined;
+  return values?.shift();
 }
 
 function getLatestMonth(rows: DbTransaction[]) {
@@ -144,12 +270,13 @@ function applyTemporaryMayUnit(row: DbTransaction, transaction: Transaction): Tr
   };
 }
 
-function toTransaction(row: DbTransaction): Transaction {
+function toTransaction(row: DbTransaction, cardIssuerLookup?: Map<string, string[]>): Transaction {
+  const cardBudgetGroup = row.card_budget_group || consumeCardIssuer(row, cardIssuerLookup) || undefined;
   const firstPass = classifyFirstPass({
     source: row.source,
     businessUnit: row.business_unit,
     accountId: row.account_id,
-    cardBudgetGroup: row.card_budget_group,
+    cardBudgetGroup,
     vendor: row.vendor,
     description: row.description,
     amount: row.amount,
@@ -176,7 +303,8 @@ function toTransaction(row: DbTransaction): Transaction {
     source: row.source || "업로드",
     businessUnit: useFirstPass ? firstPass.businessUnit : row.business_unit || "미배분",
     accountId: row.account_id || firstPass.accountId || undefined,
-    cardBudgetGroup: row.card_budget_group || undefined,
+    cardBudgetGroup,
+    cardIssuer: cardBudgetGroup,
     vendor: row.vendor || "-",
     description: row.description || row.vendor || "-",
     amount: toNumber(row.amount),
@@ -279,6 +407,12 @@ export async function getDashboardData(): Promise<DashboardData> {
     const currentBalanceMovements = currentMonth
       ? dbBalanceMovements.filter((row) => row.month === currentMonth)
       : dbBalanceMovements;
+    const transactionBatchIds = Array.from(new Set(
+      currentTransactions
+        .map((row) => row.upload_batch_id)
+        .filter((id): id is string => Boolean(id))
+    ));
+    const cardIssuerLookup = buildCardIssuerLookup(await fetchAllRawRowsForBatches(admin, transactionBatchIds));
 
     const countResult = await admin
       .from("upload_raw_rows")
@@ -287,7 +421,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     return {
       mode: "live",
       currentMonth,
-      transactions: currentTransactions.map(toTransaction),
+      transactions: currentTransactions.map((row) => toTransaction(row, cardIssuerLookup)),
       bankAccounts: ((bankResult.data || []) as DbBankAccount[]).map(toBankAccount),
       balanceMovements: (currentBalanceMovements.length > 0 ? currentBalanceMovements : dbBalanceMovements).map(toBalanceMovement),
       uploadBatches: ((batchResult.data || []) as Record<string, string | null>[]).map((row) => ({

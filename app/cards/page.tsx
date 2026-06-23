@@ -55,7 +55,7 @@ export default async function CardsPage() {
             <thead>
               <tr>
                 <th>일자</th>
-                <th>예산그룹</th>
+                <th>카드사/사용자</th>
                 <th>최종 사업부</th>
                 <th>공통</th>
                 <th>거래처</th>

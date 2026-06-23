@@ -7,6 +7,7 @@ export type NormalizedTransaction = {
   source: "은행" | "카드" | "파로스" | "수기입력";
   business_unit: BusinessUnitValue;
   account_id?: string | null;
+  card_budget_group?: string | null;
   vendor: string | null;
   description: string | null;
   amount: number;
@@ -39,6 +40,7 @@ const amountKeys = ["금액", "거래금액", "거래 금액", "승인금액", "
 const incomeKeys = ["입금", "입금액", "입금금액", "입금 금액", "수입", "대변"];
 const outcomeKeys = ["출금", "출금액", "출금금액", "출금 금액", "지출", "차변"];
 const businessUnitKeys = ["사업부", "사업단위", "귀속사업부", "부서", "business_unit"];
+const cardBudgetGroupKeys = ["카드사", "카드회사", "카드명", "카드구분", "카드사/사용자", "card_budget_group"];
 const mainCategoryKeys = ["대분류", "분류", "계정과목", "계정", "main_category"];
 const subCategoryKeys = ["중분류", "소분류", "세부분류", "sub_category"];
 
@@ -154,6 +156,7 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
     const description = pick(row, descriptionKeys) || vendor || null;
     const { amount, cashFlowType } = getAmountAndFlow(row, uploadType);
     const businessUnit = normalizeBusinessUnit(pick(row, businessUnitKeys));
+    const cardBudgetGroup = uploadType === "card" ? pick(row, cardBudgetGroupKeys) || null : null;
     const mainCategory = pick(row, mainCategoryKeys) || null;
     const subCategory = pick(row, subCategoryKeys) || null;
 
@@ -169,6 +172,7 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
     const firstPass = classifyFirstPass({
       source,
       businessUnit,
+      cardBudgetGroup,
       vendor,
       description,
       amount,
@@ -186,6 +190,7 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
           source,
           business_unit: firstPass.businessUnit,
           account_id: firstPass.accountId || null,
+          card_budget_group: cardBudgetGroup,
           vendor,
           description,
           amount,
@@ -208,6 +213,7 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
       rawData: row,
       normalizedData: {
         transaction_date: transactionDate,
+        card_budget_group: cardBudgetGroup,
         vendor,
         description,
         amount,

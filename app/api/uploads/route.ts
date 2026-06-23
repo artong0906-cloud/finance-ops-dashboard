@@ -147,6 +147,7 @@ export async function POST(request: NextRequest) {
         source: transaction.source,
         business_unit: transaction.business_unit,
         account_id: transaction.account_id,
+        card_budget_group: transaction.card_budget_group,
         vendor: transaction.vendor,
         description: transaction.description,
         amount: transaction.amount,

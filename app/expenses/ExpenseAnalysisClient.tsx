@@ -3,6 +3,9 @@ import type { Transaction } from "@/types/finance";
 
 const talentLabels = ["인투1 집", "인투2 차", "인투3 밥", "인투4 돈", "인투5 성장", "인투6 환경"] as const;
 const allFilter = "전체";
+const allCardUserFilter = "전체 카드사";
+const nonCardUserFilter = "카드 외";
+const unknownCardUserFilter = "카드사 미지정";
 
 type TalentFilter = typeof allFilter | (typeof talentLabels)[number];
 
@@ -13,9 +16,16 @@ type TalentSummary = {
   share: number;
 };
 
+type CardUserSummary = {
+  label: string;
+  amount: number;
+  count: number;
+};
+
 type ResolvedExpenseRow = {
   row: Transaction;
   talentType?: (typeof talentLabels)[number];
+  cardUser: string;
 };
 
 function sumResolvedAmount(rows: ResolvedExpenseRow[]) {
@@ -31,6 +41,14 @@ function normalizeTalentText(value: string | undefined) {
     .toLowerCase()
     .replace(/\s+/g, "")
     .replace(/[()[\]{}#·._-]/g, "");
+}
+
+function normalizeFilterText(value: string | undefined) {
+  return (value || "")
+    .trim()
+    .replace(/[()[\]{}·._-]/g, "")
+    .replace(/\s+/g, "")
+    .toLowerCase();
 }
 
 function includesAny(text: string, keywords: string[]) {
@@ -85,6 +103,21 @@ function resolveActiveFilter(value: string | undefined): TalentFilter {
   return allFilter;
 }
 
+function resolveCardUser(row: Transaction) {
+  if (row.source !== "카드") return nonCardUserFilter;
+  return row.cardIssuer || row.cardBudgetGroup || unknownCardUserFilter;
+}
+
+function resolveActiveCardUser(value: string | undefined, summaries: CardUserSummary[]) {
+  if (!value) return allCardUserFilter;
+
+  const normalized = normalizeFilterText(value);
+  if (normalizeFilterText(allCardUserFilter) === normalized) return allCardUserFilter;
+
+  const matched = summaries.find((summary) => normalizeFilterText(summary.label) === normalized);
+  return matched?.label || allCardUserFilter;
+}
+
 function splitTalentLabel(label: string) {
   const [code, ...rest] = label.split(" ");
   return {
@@ -93,25 +126,58 @@ function splitTalentLabel(label: string) {
   };
 }
 
-function filterHref(label: TalentFilter) {
-  if (label === allFilter) return "/expenses";
-  return `/expenses?talent=${encodeURIComponent(label)}#expense-detail`;
+function expenseHref(talent: TalentFilter, cardUser = allCardUserFilter) {
+  const params = new URLSearchParams();
+  if (talent !== allFilter) params.set("talent", talent);
+  if (cardUser !== allCardUserFilter) params.set("cardUser", cardUser);
+  const query = params.toString();
+
+  return `/expenses${query ? `?${query}` : ""}#expense-detail`;
+}
+
+function buildCardUserSummaries(rows: ResolvedExpenseRow[]) {
+  const grouped = rows.reduce((acc, item) => {
+    const current = acc.get(item.cardUser) || { label: item.cardUser, amount: 0, count: 0 };
+    current.amount += item.row.amount;
+    current.count += 1;
+    acc.set(item.cardUser, current);
+    return acc;
+  }, new Map<string, CardUserSummary>());
+
+  return Array.from(grouped.values()).sort((a, b) => {
+    if (a.label === nonCardUserFilter) return 1;
+    if (b.label === nonCardUserFilter) return -1;
+    if (a.label === unknownCardUserFilter) return 1;
+    if (b.label === unknownCardUserFilter) return -1;
+    return b.amount - a.amount;
+  });
 }
 
 export function ExpenseAnalysisClient({
   activeFilter: activeFilterValue,
+  activeCardUser: activeCardUserValue,
   expenseRows
 }: {
   activeFilter?: string;
+  activeCardUser?: string;
   expenseRows: Transaction[];
 }) {
   const activeFilter = resolveActiveFilter(activeFilterValue);
-  const resolvedRows = expenseRows.map((row) => ({ row, talentType: resolveTalentType(row) }));
+  const resolvedRows = expenseRows.map((row) => ({
+    row,
+    talentType: resolveTalentType(row),
+    cardUser: resolveCardUser(row)
+  }));
   const talentRows = resolvedRows.filter((item) => item.talentType ? talentLabels.includes(item.talentType) : false);
   const talentTotal = sumResolvedAmount(talentRows);
-  const filteredRows = activeFilter === allFilter
+  const talentFilteredRows = activeFilter === allFilter
     ? resolvedRows
     : resolvedRows.filter((item) => item.talentType === activeFilter);
+  const cardUserSummaries = buildCardUserSummaries(talentFilteredRows);
+  const activeCardUser = resolveActiveCardUser(activeCardUserValue, cardUserSummaries);
+  const filteredRows = activeCardUser === allCardUserFilter
+    ? talentFilteredRows
+    : talentFilteredRows.filter((item) => item.cardUser === activeCardUser);
   const filteredTotal = sumResolvedAmount(filteredRows);
   const summaries: TalentSummary[] = talentLabels.map((label) => {
     const rows = resolvedRows.filter((item) => item.talentType === label);
@@ -128,7 +194,7 @@ export function ExpenseAnalysisClient({
   return (
     <>
       <section className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
-        상단 인투 카드를 클릭하면 URL 필터가 적용되고, 하단 지출 상세가 해당 유형으로 다시 렌더링됩니다. 2026년 5월은 사업부 세부 귀속 기준 확정 전까지 광고사업부 입금/출금으로 산정합니다.
+        상단 인투 카드로 유형을 선택한 뒤, 하단의 카드사/사용자별 조회에서 법인카드 사용 주체를 좁혀 볼 수 있습니다. 기준값은 업로드한 매입신용카드 시트의 카드사 컬럼입니다.
       </section>
 
       <section className="mb-6 grid grid-cols-[minmax(0,1fr)_260px] gap-4 max-xl:grid-cols-1">
@@ -143,7 +209,7 @@ export function ExpenseAnalysisClient({
                   "card kpi cursor-pointer p-4 text-left transition",
                   selected ? "border-blue-500 bg-blue-50 shadow-sm ring-1 ring-blue-100" : "hover:border-blue-200 hover:bg-slate-50"
                 ].join(" ")}
-                href={filterHref(summary.label)}
+                href={expenseHref(summary.label)}
                 key={summary.label}
                 aria-current={selected ? "true" : undefined}
               >
@@ -172,7 +238,9 @@ export function ExpenseAnalysisClient({
             <p className="mt-3 text-sm leading-6 text-slate-600">
               {activeFilter === allFilter
                 ? "전체 지출 거래를 표시 중입니다."
-                : `${activeFilter}로 분류된 거래만 하단 상세에 표시 중입니다.`}
+                : `${activeFilter}로 분류된 거래를 기준으로 표시 중입니다.`}
+              <br />
+              카드사/사용자: {activeCardUser}
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -185,7 +253,7 @@ export function ExpenseAnalysisClient({
               <div className="mt-2 font-black text-slate-950">{filteredRows.length.toLocaleString("ko-KR")}건</div>
             </div>
           </div>
-          <a className="btn w-full" href={filterHref(allFilter)}>
+          <a className="btn w-full" href={expenseHref(allFilter)}>
             전체 지출 보기
           </a>
         </aside>
@@ -196,12 +264,56 @@ export function ExpenseAnalysisClient({
           <div>
             <h2 className="section-title">지출 상세</h2>
             <p className="mt-1 text-sm text-slate-500">
-              {activeFilter === allFilter ? "전체 지출 거래" : `${activeFilter} 거래`} {filteredRows.length.toLocaleString("ko-KR")}건을 표시합니다.
+              {activeFilter === allFilter ? "전체 지출 거래" : `${activeFilter} 거래`} 중 {activeCardUser} 기준 {filteredRows.length.toLocaleString("ko-KR")}건을 표시합니다.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="badge">{activeFilter}</span>
+            <span className="badge">{activeCardUser}</span>
             <span className="badge badge-muted">{formatKRW(filteredTotal)}</span>
+          </div>
+        </div>
+
+        <div className="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <div className="flex items-start justify-between gap-4 max-md:flex-col">
+            <div>
+              <div className="eyebrow">카드사/사용자별 조회</div>
+              <p className="mt-1 text-sm text-slate-600">
+                선택된 인투 유형 안에서 매입신용카드 원본의 카드사 컬럼 기준으로 지출 상세를 다시 필터링합니다.
+              </p>
+            </div>
+            <a
+              className={[
+                "btn btn-sm",
+                activeCardUser === allCardUserFilter ? "bg-blue-50 text-blue-700" : ""
+              ].join(" ")}
+              href={expenseHref(activeFilter)}
+            >
+              전체 카드사 {talentFilteredRows.length.toLocaleString("ko-KR")}건
+            </a>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {cardUserSummaries.map((summary) => {
+              const selected = activeCardUser === summary.label;
+
+              return (
+                <a
+                  className={[
+                    "rounded-full border px-3 py-2 text-xs font-black transition",
+                    selected
+                      ? "border-blue-500 bg-blue-50 text-blue-700 ring-1 ring-blue-100"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700"
+                  ].join(" ")}
+                  href={expenseHref(activeFilter, summary.label)}
+                  key={summary.label}
+                  aria-current={selected ? "true" : undefined}
+                >
+                  {summary.label}
+                  <span className="ml-2 text-slate-400">{summary.count.toLocaleString("ko-KR")}건</span>
+                  <span className="ml-2 text-slate-400">{formatKRW(summary.amount)}</span>
+                </a>
+              );
+            })}
           </div>
         </div>
 
@@ -212,6 +324,7 @@ export function ExpenseAnalysisClient({
                 <tr>
                   <th>일자</th>
                   <th>인투유형</th>
+                  <th>카드사/사용자</th>
                   <th>사업부</th>
                   <th>원천</th>
                   <th>대분류</th>
@@ -224,10 +337,15 @@ export function ExpenseAnalysisClient({
                 </tr>
               </thead>
               <tbody>
-                {filteredRows.map(({ row, talentType }) => (
+                {filteredRows.map(({ row, talentType, cardUser }) => (
                   <tr key={row.id}>
                     <td>{row.date}</td>
                     <td>{talentType ? <span className="badge">{talentType}</span> : <span className="badge badge-muted">미지정</span>}</td>
+                    <td>
+                      <span className={cardUser === nonCardUserFilter || cardUser === unknownCardUserFilter ? "badge badge-muted" : "badge"}>
+                        {cardUser}
+                      </span>
+                    </td>
                     <td>{row.businessUnit}</td>
                     <td>{row.source}</td>
                     <td>{row.mainCategory}</td>
@@ -245,9 +363,9 @@ export function ExpenseAnalysisClient({
         ) : (
           <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
             <div className="font-black text-slate-950">표시할 지출 상세가 없습니다.</div>
-            <p className="mt-2 text-sm text-slate-500">다른 인투 카드를 선택하거나 전체 지출 보기로 돌아가세요.</p>
-            <a className="btn mt-4" href={filterHref(allFilter)}>
-              전체 지출 보기
+            <p className="mt-2 text-sm text-slate-500">다른 인투 카드나 카드사/사용자 필터를 선택해 주세요.</p>
+            <a className="btn mt-4" href={expenseHref(activeFilter)}>
+              카드사 필터 해제
             </a>
           </div>
         )}

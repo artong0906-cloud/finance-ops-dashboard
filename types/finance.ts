@@ -13,6 +13,7 @@ export type Transaction = {
   accountName?: string;
   accountId?: string;
   cardBudgetGroup?: string;
+  cardIssuer?: string;
   vendor: string;
   description: string;
   amount: number;
