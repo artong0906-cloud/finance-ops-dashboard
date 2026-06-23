@@ -7,7 +7,22 @@ import type { Transaction } from "@/types/finance";
 
 const revenueCategories = ["광고사업부 매출", "대외협력부 매출", "플랫폼 매출", "기타매출"] as const;
 const allFilter = "전체";
-const miscKeywords = ["고용노동부", "고용부", "지원금", "훈련비", "식대"];
+const miscKeywords = [
+  "고용노동부",
+  "고용부",
+  "지원금",
+  "훈련비",
+  "식대",
+  "환급",
+  "매출취소",
+  "대여금상환",
+  "급여착오지급반환",
+  "착오지급반환",
+  "캐시백",
+  "조수인",
+  "영업외수익"
+];
+const loanExecutionKeywords = ["대출실행", "대출금입금", "대출금 입금", "신규대출", "차입금입금", "차입금 입금"];
 
 type RevenueCategory = (typeof revenueCategories)[number];
 type RevenueFilter = typeof allFilter | RevenueCategory;
@@ -45,6 +60,11 @@ function rowText(row: Transaction) {
 function matchedMiscKeyword(row: Transaction) {
   const text = rowText(row);
   return miscKeywords.find((keyword) => text.includes(normalizeText(keyword)));
+}
+
+function isLoanExecutionDeposit(row: Transaction) {
+  const text = rowText(row);
+  return loanExecutionKeywords.some((keyword) => text.includes(normalizeText(keyword)));
 }
 
 function classifyRevenue(row: Transaction): Pick<RevenueRow, "category" | "rule"> {
@@ -92,7 +112,7 @@ function percent(part: number, total: number) {
 
 function ruleCaption(category: RevenueCategory) {
   if (category === "광고사업부 매출") return "5월 통장 입금 기본 산정";
-  if (category === "기타매출") return "고용노동부·지원금·훈련비·식대";
+  if (category === "기타매출") return "지원금·환급·대여금상환·영업외수익";
   return "6월부터 분리 기준 적용 예정";
 }
 
@@ -100,11 +120,13 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
   const params = searchParams ? await searchParams : {};
   const activeFilter = resolveFilter(Array.isArray(params.category) ? params.category[0] : params.category);
   const data = await getDashboardData();
-  const depositRows = data.transactions.filter((row) => (
+  const bankDepositRows = data.transactions.filter((row) => (
     row.source === "은행"
     && row.cashFlowType === "입금"
     && !row.isInternalTransfer
   ));
+  const excludedLoanRows = bankDepositRows.filter(isLoanExecutionDeposit);
+  const depositRows = bankDepositRows.filter((row) => !isLoanExecutionDeposit(row));
   const revenueRows: RevenueRow[] = depositRows.map((row) => ({
     row,
     ...classifyRevenue(row)
@@ -135,7 +157,8 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
     >
       <section className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
         5월은 모든 입금이 한 통장으로 들어왔기 때문에 기본적으로 광고사업부 매출로 산정합니다.
-        고용노동부, 고용부, 지원금, 훈련비, 식대 키워드는 기타매출로 분리하며, 6월부터 대외협력부와 플랫폼 기준을 추가 적용합니다.
+        고용노동부, 고용부, 지원금, 훈련비, 식대, 환급, 매출취소, 대여금상환, 급여착오지급반환, 캐시백, 조수인 입금, 영업외수익은 기타매출로 분리합니다.
+        대출실행 입금은 매출 후보에서 제외합니다.
       </section>
 
       <section className="mb-6 grid grid-cols-[minmax(0,1fr)_280px] gap-4 max-xl:grid-cols-1">
@@ -195,16 +218,21 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
         </aside>
       </section>
 
-      <section className="mb-6 grid grid-cols-3 gap-4 max-lg:grid-cols-1">
+      <section className="mb-6 grid grid-cols-4 gap-4 max-xl:grid-cols-2 max-md:grid-cols-1">
         <div className="card">
           <div className="eyebrow">통장 입금 매출 후보</div>
           <div className="metric-value mt-3">{formatKRW(totalRevenue)}</div>
           <div className="mt-2 text-xs text-slate-500">{revenueRows.length.toLocaleString("ko-KR")}건</div>
         </div>
         <div className="card">
+          <div className="eyebrow">대출실행 제외</div>
+          <div className="metric-value mt-3">{formatKRW(excludedLoanRows.reduce((sum, row) => sum + row.amount, 0))}</div>
+          <div className="mt-2 text-xs text-slate-500">{excludedLoanRows.length.toLocaleString("ko-KR")}건 · 매출 후보 제외</div>
+        </div>
+        <div className="card">
           <div className="eyebrow">기타매출 분리</div>
           <div className="metric-value mt-3">{formatKRW(summaries.find((item) => item.category === "기타매출")?.amount || 0)}</div>
-          <div className="mt-2 text-xs text-slate-500">지원금/훈련비/식대 등</div>
+          <div className="mt-2 text-xs text-slate-500">지원금/환급/대여금상환 등</div>
         </div>
         <div className="card">
           <div className="eyebrow">현재 선택 상세</div>
