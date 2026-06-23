@@ -5,14 +5,16 @@ import { formatKRW } from "@/services/dashboard/calculations";
 import { getDashboardData } from "@/services/dashboard/liveData";
 import type { Transaction } from "@/types/finance";
 
-const revenueCategories = ["광고사업부 매출", "대외협력부 매출", "플랫폼 매출", "기타매출"] as const;
+const revenueCategories = ["광고사업부 매출", "대외협력부 매출", "플랫폼 매출", "정부지원금", "기타매출"] as const;
 const allFilter = "전체";
-const miscKeywords = [
+const governmentSupportKeywords = [
   "고용노동부",
   "고용부",
   "지원금",
   "훈련비",
-  "식대",
+  "식대"
+];
+const miscKeywords = [
   "환급",
   "매출취소",
   "대여금상환",
@@ -62,13 +64,26 @@ function matchedMiscKeyword(row: Transaction) {
   return miscKeywords.find((keyword) => text.includes(normalizeText(keyword)));
 }
 
+function matchedGovernmentSupportKeyword(row: Transaction) {
+  const text = rowText(row);
+  return governmentSupportKeywords.find((keyword) => text.includes(normalizeText(keyword)));
+}
+
 function isLoanExecutionDeposit(row: Transaction) {
   const text = rowText(row);
   return loanExecutionKeywords.some((keyword) => text.includes(normalizeText(keyword)));
 }
 
 function classifyRevenue(row: Transaction): Pick<RevenueRow, "category" | "rule"> {
+  const governmentSupportKeyword = matchedGovernmentSupportKeyword(row);
   const miscKeyword = matchedMiscKeyword(row);
+
+  if (governmentSupportKeyword) {
+    return {
+      category: "정부지원금",
+      rule: `정부지원금 키워드: ${governmentSupportKeyword}`
+    };
+  }
 
   if (miscKeyword) {
     return {
@@ -95,6 +110,7 @@ function resolveFilter(value: string | undefined): RevenueFilter {
   if (text.includes("광고")) return "광고사업부 매출";
   if (text.includes("대외")) return "대외협력부 매출";
   if (text.includes("플랫폼")) return "플랫폼 매출";
+  if (text.includes("정부") || text.includes("지원금")) return "정부지원금";
   if (text.includes("기타")) return "기타매출";
 
   return allFilter;
@@ -112,7 +128,8 @@ function percent(part: number, total: number) {
 
 function ruleCaption(category: RevenueCategory) {
   if (category === "광고사업부 매출") return "5월 통장 입금 기본 산정";
-  if (category === "기타매출") return "지원금·환급·대여금상환·영업외수익";
+  if (category === "정부지원금") return "고용노동부·지원금·훈련비·식대";
+  if (category === "기타매출") return "환급·매출취소·상환·영업외수익";
   return "6월부터 분리 기준 적용 예정";
 }
 
@@ -151,18 +168,19 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
   return (
     <AppShell
       title="매출 분석"
-      description="5월 통장 입금내역을 기준으로 매출을 광고사업부, 대외협력부, 플랫폼, 기타매출로 시뮬레이션합니다."
+      description="5월 통장 입금내역을 기준으로 매출을 광고사업부, 대외협력부, 플랫폼, 정부지원금, 기타매출로 시뮬레이션합니다."
       periodLabel={data.currentMonth || "2026-05"}
       activePath="/revenue"
     >
       <section className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
         5월은 모든 입금이 한 통장으로 들어왔기 때문에 기본적으로 광고사업부 매출로 산정합니다.
-        고용노동부, 고용부, 지원금, 훈련비, 식대, 환급, 매출취소, 대여금상환, 급여착오지급반환, 캐시백, 조수인 입금, 영업외수익은 기타매출로 분리합니다.
+        고용노동부, 고용부, 지원금, 훈련비, 식대는 정부지원금으로 분리합니다.
+        환급, 매출취소, 대여금상환, 급여착오지급반환, 캐시백, 조수인 입금, 영업외수익은 기타매출로 분리합니다.
         대출실행 입금은 매출 후보에서 제외합니다.
       </section>
 
       <section className="mb-6 grid grid-cols-[minmax(0,1fr)_280px] gap-4 max-xl:grid-cols-1">
-        <div className="grid grid-cols-4 gap-4 max-xl:grid-cols-2 max-md:grid-cols-1">
+        <div className="grid grid-cols-5 gap-4 max-2xl:grid-cols-3 max-xl:grid-cols-2 max-md:grid-cols-1">
           {summaries.map((summary) => {
             const selected = activeFilter === summary.category;
 
@@ -218,7 +236,7 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
         </aside>
       </section>
 
-      <section className="mb-6 grid grid-cols-4 gap-4 max-xl:grid-cols-2 max-md:grid-cols-1">
+      <section className="mb-6 grid grid-cols-5 gap-4 max-2xl:grid-cols-3 max-xl:grid-cols-2 max-md:grid-cols-1">
         <div className="card">
           <div className="eyebrow">통장 입금 매출 후보</div>
           <div className="metric-value mt-3">{formatKRW(totalRevenue)}</div>
@@ -230,9 +248,14 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
           <div className="mt-2 text-xs text-slate-500">{excludedLoanRows.length.toLocaleString("ko-KR")}건 · 매출 후보 제외</div>
         </div>
         <div className="card">
+          <div className="eyebrow">정부지원금 분리</div>
+          <div className="metric-value mt-3">{formatKRW(summaries.find((item) => item.category === "정부지원금")?.amount || 0)}</div>
+          <div className="mt-2 text-xs text-slate-500">고용노동부/지원금/훈련비 등</div>
+        </div>
+        <div className="card">
           <div className="eyebrow">기타매출 분리</div>
           <div className="metric-value mt-3">{formatKRW(summaries.find((item) => item.category === "기타매출")?.amount || 0)}</div>
-          <div className="mt-2 text-xs text-slate-500">지원금/환급/대여금상환 등</div>
+          <div className="mt-2 text-xs text-slate-500">환급/대여금상환/캐시백 등</div>
         </div>
         <div className="card">
           <div className="eyebrow">현재 선택 상세</div>
@@ -272,7 +295,7 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
               {filteredRows.map(({ row, category, rule }) => (
                 <tr key={row.id}>
                   <td>{row.date}</td>
-                  <td><span className={category === "기타매출" ? "badge badge-warning" : "badge"}>{category}</span></td>
+                  <td><span className={category === "기타매출" ? "badge badge-warning" : category === "정부지원금" ? "badge badge-good" : "badge"}>{category}</span></td>
                   <td>{row.accountName || row.accountId || row.source}</td>
                   <td>{row.vendor}</td>
                   <td>{row.description}</td>
