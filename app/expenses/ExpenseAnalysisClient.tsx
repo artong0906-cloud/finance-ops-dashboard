@@ -18,10 +18,6 @@ type ResolvedExpenseRow = {
   talentType?: (typeof talentLabels)[number];
 };
 
-function sumAmount(rows: Transaction[]) {
-  return rows.reduce((sum, row) => sum + row.amount, 0);
-}
-
 function sumResolvedAmount(rows: ResolvedExpenseRow[]) {
   return rows.reduce((sum, { row }) => sum + row.amount, 0);
 }
@@ -110,7 +106,6 @@ export function ExpenseAnalysisClient({
   expenseRows: Transaction[];
 }) {
   const activeFilter = resolveActiveFilter(activeFilterValue);
-  const totalAmount = sumAmount(expenseRows);
   const resolvedRows = expenseRows.map((row) => ({ row, talentType: resolveTalentType(row) }));
   const talentRows = resolvedRows.filter((item) => item.talentType ? talentLabels.includes(item.talentType) : false);
   const talentTotal = sumResolvedAmount(talentRows);
@@ -194,24 +189,6 @@ export function ExpenseAnalysisClient({
             전체 지출 보기
           </a>
         </aside>
-      </section>
-
-      <section className="mb-6 grid grid-cols-3 gap-4 max-lg:grid-cols-1">
-        <div className="card">
-          <div className="eyebrow">전체 지출</div>
-          <div className="metric-value mt-3">{formatKRW(totalAmount)}</div>
-          <div className="mt-2 text-xs text-slate-500">{expenseRows.length.toLocaleString("ko-KR")}건</div>
-        </div>
-        <div className="card">
-          <div className="eyebrow">인재투자 합계</div>
-          <div className="metric-value mt-3">{formatKRW(talentTotal)}</div>
-          <div className="mt-2 text-xs text-slate-500">{talentRows.length.toLocaleString("ko-KR")}건</div>
-        </div>
-        <div className="card">
-          <div className="eyebrow">현재 선택 상세</div>
-          <div className="metric-value mt-3">{formatKRW(filteredTotal)}</div>
-          <div className="mt-2 text-xs text-slate-500">{filteredRows.length.toLocaleString("ko-KR")}건 표시</div>
-        </div>
       </section>
 
       <section className="card" id="expense-detail">

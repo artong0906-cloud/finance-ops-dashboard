@@ -142,7 +142,6 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
     && row.cashFlowType === "입금"
     && !row.isInternalTransfer
   ));
-  const excludedLoanRows = bankDepositRows.filter(isLoanExecutionDeposit);
   const depositRows = bankDepositRows.filter((row) => !isLoanExecutionDeposit(row));
   const revenueRows: RevenueRow[] = depositRows.map((row) => ({
     row,
@@ -234,34 +233,6 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
             전체 매출 보기
           </a>
         </aside>
-      </section>
-
-      <section className="mb-6 grid grid-cols-5 gap-4 max-2xl:grid-cols-3 max-xl:grid-cols-2 max-md:grid-cols-1">
-        <div className="card">
-          <div className="eyebrow">통장 입금 매출 후보</div>
-          <div className="metric-value mt-3">{formatKRW(totalRevenue)}</div>
-          <div className="mt-2 text-xs text-slate-500">{revenueRows.length.toLocaleString("ko-KR")}건</div>
-        </div>
-        <div className="card">
-          <div className="eyebrow">대출실행 제외</div>
-          <div className="metric-value mt-3">{formatKRW(excludedLoanRows.reduce((sum, row) => sum + row.amount, 0))}</div>
-          <div className="mt-2 text-xs text-slate-500">{excludedLoanRows.length.toLocaleString("ko-KR")}건 · 매출 후보 제외</div>
-        </div>
-        <div className="card">
-          <div className="eyebrow">정부지원금 분리</div>
-          <div className="metric-value mt-3">{formatKRW(summaries.find((item) => item.category === "정부지원금")?.amount || 0)}</div>
-          <div className="mt-2 text-xs text-slate-500">고용노동부/지원금/훈련비 등</div>
-        </div>
-        <div className="card">
-          <div className="eyebrow">기타매출 분리</div>
-          <div className="metric-value mt-3">{formatKRW(summaries.find((item) => item.category === "기타매출")?.amount || 0)}</div>
-          <div className="mt-2 text-xs text-slate-500">환급/대여금상환/캐시백 등</div>
-        </div>
-        <div className="card">
-          <div className="eyebrow">현재 선택 상세</div>
-          <div className="metric-value mt-3">{formatKRW(filteredTotal)}</div>
-          <div className="mt-2 text-xs text-slate-500">{filteredRows.length.toLocaleString("ko-KR")}건 표시</div>
-        </div>
       </section>
 
       <section className="card" id="revenue-detail">
