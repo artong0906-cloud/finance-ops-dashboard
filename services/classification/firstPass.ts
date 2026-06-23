@@ -231,8 +231,8 @@ export function classifyFirstPass(input: FirstPassInput): FirstPassResult {
     applyTalent("인투2 차", "인투2 차", includesAny(text, ["리스"]) ? "차량 리스료" : "차량 유지/교통", "talent-2-car");
   } else if (includesAny(text, ["#인투3", "인투(밥)", "인투3밥", "식대", "조식", "커피", "카페", "편의점", "간식", "한식", "복리후생비"])) {
     applyTalent("인투3 밥", "인투3 밥", includesAny(text, ["커피", "카페"]) ? "커피/카페" : "식대/간식", "talent-3-meal");
-  } else if (includesAny(text, ["#인투4", "인투(몸)", "인투(돈)", "인투4몸", "복지포인트", "일자리공제", "내일채움공제", "4대보험", "보험료"])) {
-    applyTalent("인투4 몸", "인투4 몸", includesAny(text, ["4대보험", "보험료"]) ? "보험/공제" : "복지포인트/공제", "talent-4-welfare");
+  } else if (includesAny(text, ["#인투4", "인투(몸)", "인투(돈)", "인투4몸", "인투4돈", "복지포인트", "일자리공제", "내일채움공제", "4대보험", "보험료"])) {
+    applyTalent("인투4 돈", "인투4 돈", includesAny(text, ["4대보험", "보험료"]) ? "보험/공제" : "복지포인트/공제", "talent-4-welfare");
   } else if (includesAny(text, ["#인투5", "인투(성장)", "인투5성장", "플랫폼", "교육훈련비", "교육", "출장", "숙박", "여비교통비", "교통비", "구글", "openai", "gemini", "재미나이", "클링ai", "kling", "ai"])) {
     const isPlatform = includesAny(text, ["플랫폼", "구글", "openai", "gemini", "재미나이", "클링ai", "kling", "ai", "앱"]);
     applyTalent("인투5 성장", "인투5 성장", includesAny(text, ["출장", "숙박", "교통비", "고속도로"]) ? "출장/교통" : "플랫폼/교육", "talent-5-growth", isPlatform ? "플랫폼" : result.businessUnit === "미배분" ? "공통사용분" : result.businessUnit);

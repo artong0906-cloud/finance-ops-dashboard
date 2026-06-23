@@ -119,6 +119,15 @@ function toUiExpenseBasis(value: string | null | undefined, cashFlowType: string
   return cashFlowType === "출금" ? "비용" : "해당없음";
 }
 
+function normalizeTalentLabel(value: string | null | undefined) {
+  if (!value) return value;
+  return value
+    .replaceAll("인투4 몸", "인투4 돈")
+    .replaceAll("인투4몸", "인투4 돈")
+    .replaceAll("투자4 몸", "인투4 돈")
+    .replaceAll("투자4몸", "인투4 돈");
+}
+
 function applyTemporaryMayUnit(row: DbTransaction, transaction: Transaction): Transaction {
   if (!row.transaction_date?.startsWith("2026-05")) return transaction;
   if (transaction.cashFlowType !== "입금" && transaction.cashFlowType !== "출금") return transaction;
@@ -172,10 +181,10 @@ function toTransaction(row: DbTransaction): Transaction {
     description: row.description || row.vendor || "-",
     amount: toNumber(row.amount),
     cashFlowType: row.cash_flow_type || "제외",
-    mainCategory: useFirstPass ? firstPass.mainCategory : row.main_category || "미분류",
-    subCategory: useFirstPass ? firstPass.subCategory : row.sub_category || "미분류",
-    detailCategory: useFirstPass ? firstPass.detailCategory : row.detail_category || "미분류",
-    talentInvestmentType: useFirstPass ? firstPass.talentInvestmentType : row.talent_investment_type || undefined,
+    mainCategory: normalizeTalentLabel(useFirstPass ? firstPass.mainCategory : row.main_category) || "미분류",
+    subCategory: normalizeTalentLabel(useFirstPass ? firstPass.subCategory : row.sub_category) || "미분류",
+    detailCategory: normalizeTalentLabel(useFirstPass ? firstPass.detailCategory : row.detail_category) || "미분류",
+    talentInvestmentType: normalizeTalentLabel(useFirstPass ? firstPass.talentInvestmentType : row.talent_investment_type) || undefined,
     expenseBasis: toUiExpenseBasis(useFirstPass ? firstPass.expenseBasis : row.expense_basis, row.cash_flow_type),
     isInternalTransfer: useFirstPass ? firstPass.isInternalTransfer : Boolean(row.is_internal_transfer),
     isCommonUse: useFirstPass ? firstPass.isCommonUse : Boolean(row.is_common_use),

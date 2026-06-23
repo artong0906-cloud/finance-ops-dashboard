@@ -1,16 +1,14 @@
-"use client";
-
-import { useMemo, useState } from "react";
+import Link from "next/link";
 import { formatKRW } from "@/services/dashboard/calculations";
 import type { Transaction } from "@/types/finance";
 
-const talentLabels = ["인투1 집", "인투2 차", "인투3 밥", "인투4 몸", "인투5 성장", "인투6 환경"];
+const talentLabels = ["인투1 집", "인투2 차", "인투3 밥", "인투4 돈", "인투5 성장", "인투6 환경"] as const;
 const allFilter = "전체";
 
 type TalentFilter = typeof allFilter | (typeof talentLabels)[number];
 
 type TalentSummary = {
-  label: string;
+  label: (typeof talentLabels)[number];
   amount: number;
   count: number;
   share: number;
@@ -18,7 +16,7 @@ type TalentSummary = {
 
 type ResolvedExpenseRow = {
   row: Transaction;
-  talentType?: string;
+  talentType?: (typeof talentLabels)[number];
 };
 
 function sumAmount(rows: Transaction[]) {
@@ -44,7 +42,7 @@ function includesAny(text: string, keywords: string[]) {
   return keywords.some((keyword) => text.includes(normalizeTalentText(keyword)));
 }
 
-function resolveTalentType(row: Transaction) {
+function resolveTalentType(row: Transaction): (typeof talentLabels)[number] | undefined {
   const categoryText = normalizeTalentText([
     row.talentInvestmentType,
     row.mainCategory,
@@ -64,18 +62,33 @@ function resolveTalentType(row: Transaction) {
   if (includesAny(categoryText, ["인투1", "투자1", "인재투자1", "인투집", "투자집", "사택", "월세", "지급임차료"])) return "인투1 집";
   if (includesAny(categoryText, ["인투2", "투자2", "인재투자2", "인투차", "투자차", "법인차량", "차량", "리스료", "주유", "주차", "통행료"])) return "인투2 차";
   if (includesAny(categoryText, ["인투3", "투자3", "인재투자3", "인투밥", "투자밥", "식대", "간식", "커피", "카페", "편의점"])) return "인투3 밥";
-  if (includesAny(categoryText, ["인투4", "투자4", "인재투자4", "인투몸", "투자몸", "복지포인트", "내일채움", "일자리공제", "4대보험", "보험료"])) return "인투4 몸";
+  if (includesAny(categoryText, ["인투4", "투자4", "인재투자4", "인투돈", "투자돈", "인투몸", "투자몸", "복지포인트", "내일채움", "일자리공제", "4대보험", "보험료"])) return "인투4 돈";
   if (includesAny(categoryText, ["인투5", "투자5", "인재투자5", "인투성장", "투자성장", "교육", "출장", "숙박", "플랫폼", "openai", "gemini", "kling", "ai"])) return "인투5 성장";
   if (includesAny(categoryText, ["인투6", "투자6", "인재투자6", "인투환경", "투자환경", "사무용품", "소모품", "통신비", "공과금", "전력비", "인터넷", "정수기", "보안"])) return "인투6 환경";
 
   if (includesAny(fullText, ["인투1", "투자1", "인재투자1", "사택", "월세", "지급임차료"])) return "인투1 집";
   if (includesAny(fullText, ["인투2", "투자2", "인재투자2", "법인차량", "차량리스", "리스료", "주유", "주차", "통행료", "고속도로"])) return "인투2 차";
   if (includesAny(fullText, ["인투3", "투자3", "인재투자3", "식대", "간식", "커피", "카페", "편의점", "한식"])) return "인투3 밥";
-  if (includesAny(fullText, ["인투4", "투자4", "인재투자4", "복지포인트", "내일채움", "일자리공제", "4대보험", "보험료"])) return "인투4 몸";
+  if (includesAny(fullText, ["인투4", "투자4", "인재투자4", "복지포인트", "내일채움", "일자리공제", "4대보험", "보험료"])) return "인투4 돈";
   if (includesAny(fullText, ["인투5", "투자5", "인재투자5", "교육훈련", "교육", "출장", "숙박", "플랫폼", "openai", "gemini", "kling", "클링", "재미나이"])) return "인투5 성장";
   if (includesAny(fullText, ["인투6", "투자6", "인재투자6", "환경용품", "사무용품", "소모품", "통신비", "공과금", "전력비", "인터넷", "정수기", "보안"])) return "인투6 환경";
 
   return undefined;
+}
+
+function resolveActiveFilter(value: string | undefined): TalentFilter {
+  if (!value) return allFilter;
+  if (talentLabels.includes(value as (typeof talentLabels)[number])) return value as TalentFilter;
+
+  const normalized = normalizeTalentText(value);
+  if (includesAny(normalized, ["인투1", "투자1", "집"])) return "인투1 집";
+  if (includesAny(normalized, ["인투2", "투자2", "차"])) return "인투2 차";
+  if (includesAny(normalized, ["인투3", "투자3", "밥"])) return "인투3 밥";
+  if (includesAny(normalized, ["인투4", "투자4", "돈", "몸"])) return "인투4 돈";
+  if (includesAny(normalized, ["인투5", "투자5", "성장"])) return "인투5 성장";
+  if (includesAny(normalized, ["인투6", "투자6", "환경"])) return "인투6 환경";
+
+  return allFilter;
 }
 
 function splitTalentLabel(label: string) {
@@ -86,43 +99,43 @@ function splitTalentLabel(label: string) {
   };
 }
 
-export function ExpenseAnalysisClient({ expenseRows }: { expenseRows: Transaction[] }) {
-  const [activeFilter, setActiveFilter] = useState<TalentFilter>(allFilter);
+function filterHref(label: TalentFilter) {
+  if (label === allFilter) return "/expenses";
+  return `/expenses?talent=${encodeURIComponent(label)}#expense-detail`;
+}
 
-  const totalAmount = useMemo(() => sumAmount(expenseRows), [expenseRows]);
-  const resolvedRows = useMemo<ResolvedExpenseRow[]>(
-    () => expenseRows.map((row) => ({ row, talentType: resolveTalentType(row) })),
-    [expenseRows]
-  );
-  const talentRows = useMemo(
-    () => resolvedRows.filter((item) => talentLabels.includes(item.talentType || "")),
-    [resolvedRows]
-  );
-  const talentTotal = useMemo(() => sumResolvedAmount(talentRows), [talentRows]);
-  const filteredRows = useMemo(() => {
-    if (activeFilter === allFilter) return resolvedRows;
-    return resolvedRows.filter((item) => item.talentType === activeFilter);
-  }, [activeFilter, resolvedRows]);
-  const filteredTotal = useMemo(() => sumResolvedAmount(filteredRows), [filteredRows]);
-  const summaries = useMemo<TalentSummary[]>(
-    () => talentLabels.map((label) => {
-      const rows = resolvedRows.filter((item) => item.talentType === label);
-      const amount = sumResolvedAmount(rows);
+export function ExpenseAnalysisClient({
+  activeFilter: activeFilterValue,
+  expenseRows
+}: {
+  activeFilter?: string;
+  expenseRows: Transaction[];
+}) {
+  const activeFilter = resolveActiveFilter(activeFilterValue);
+  const totalAmount = sumAmount(expenseRows);
+  const resolvedRows = expenseRows.map((row) => ({ row, talentType: resolveTalentType(row) }));
+  const talentRows = resolvedRows.filter((item) => item.talentType ? talentLabels.includes(item.talentType) : false);
+  const talentTotal = sumResolvedAmount(talentRows);
+  const filteredRows = activeFilter === allFilter
+    ? resolvedRows
+    : resolvedRows.filter((item) => item.talentType === activeFilter);
+  const filteredTotal = sumResolvedAmount(filteredRows);
+  const summaries: TalentSummary[] = talentLabels.map((label) => {
+    const rows = resolvedRows.filter((item) => item.talentType === label);
+    const amount = sumResolvedAmount(rows);
 
-      return {
-        label,
-        amount,
-        count: rows.length,
-        share: talentTotal > 0 ? (amount / talentTotal) * 100 : 0
-      };
-    }),
-    [resolvedRows, talentTotal]
-  );
+    return {
+      label,
+      amount,
+      count: rows.length,
+      share: talentTotal > 0 ? (amount / talentTotal) * 100 : 0
+    };
+  });
 
   return (
     <>
       <section className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
-        상단 인투 카드를 클릭하면 하단 지출 상세가 해당 유형으로 필터링됩니다. 2026년 5월은 사업부 세부 귀속 기준 확정 전까지 광고사업부 입금/출금으로 산정합니다.
+        상단 인투 카드를 클릭하면 URL 필터가 적용되고, 하단 지출 상세가 해당 유형으로 다시 렌더링됩니다. 2026년 5월은 사업부 세부 귀속 기준 확정 전까지 광고사업부 입금/출금으로 산정합니다.
       </section>
 
       <section className="mb-6 grid grid-cols-[minmax(0,1fr)_260px] gap-4 max-xl:grid-cols-1">
@@ -132,15 +145,14 @@ export function ExpenseAnalysisClient({ expenseRows }: { expenseRows: Transactio
             const { code, name } = splitTalentLabel(summary.label);
 
             return (
-              <button
-                type="button"
+              <Link
                 className={[
                   "card kpi cursor-pointer p-4 text-left transition",
                   selected ? "border-blue-500 bg-blue-50 shadow-sm ring-1 ring-blue-100" : "hover:border-blue-200 hover:bg-slate-50"
                 ].join(" ")}
+                href={filterHref(summary.label)}
                 key={summary.label}
-                onClick={() => setActiveFilter(summary.label)}
-                aria-pressed={selected}
+                aria-current={selected ? "true" : undefined}
               >
                 <div className="flex items-center justify-between gap-3">
                   <span className={selected ? "badge" : "badge badge-muted"}>{code}</span>
@@ -155,7 +167,7 @@ export function ExpenseAnalysisClient({ expenseRows }: { expenseRows: Transactio
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
                   <div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.min(100, summary.share)}%` }} />
                 </div>
-              </button>
+              </Link>
             );
           })}
         </div>
@@ -180,9 +192,9 @@ export function ExpenseAnalysisClient({ expenseRows }: { expenseRows: Transactio
               <div className="mt-2 font-black text-slate-950">{filteredRows.length.toLocaleString("ko-KR")}건</div>
             </div>
           </div>
-          <button type="button" className="btn w-full" onClick={() => setActiveFilter(allFilter)}>
+          <Link className="btn w-full" href={filterHref(allFilter)}>
             전체 지출 보기
-          </button>
+          </Link>
         </aside>
       </section>
 
@@ -204,7 +216,7 @@ export function ExpenseAnalysisClient({ expenseRows }: { expenseRows: Transactio
         </div>
       </section>
 
-      <section className="card">
+      <section className="card" id="expense-detail">
         <div className="mb-4 flex items-start justify-between gap-4 max-md:flex-col">
           <div>
             <h2 className="section-title">지출 상세</h2>
@@ -259,9 +271,9 @@ export function ExpenseAnalysisClient({ expenseRows }: { expenseRows: Transactio
           <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
             <div className="font-black text-slate-950">표시할 지출 상세가 없습니다.</div>
             <p className="mt-2 text-sm text-slate-500">다른 인투 카드를 선택하거나 전체 지출 보기로 돌아가세요.</p>
-            <button type="button" className="btn mt-4" onClick={() => setActiveFilter(allFilter)}>
+            <Link className="btn mt-4" href={filterHref(allFilter)}>
               전체 지출 보기
-            </button>
+            </Link>
           </div>
         )}
       </section>
