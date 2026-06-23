@@ -5,12 +5,15 @@ const categoryLabels = ["인재투자", "환불", "급여", "광고비", "세금
 const talentLabels = ["인투1 집", "인투2 차", "인투3 밥", "인투4 돈", "인투5 성장", "인투6 환경"] as const;
 const allCategoryFilter = "전체";
 const allTalentFilter = "전체 인재투자";
+const operatingLabels = ["일반운영비", "이자"] as const;
+const allOperatingFilter = "전체 운영비";
 const allCardUserFilter = "전체 카드사";
 const nonCardUserFilter = "카드 외";
 const unknownCardUserFilter = "카드사 미지정";
 
 type ExpenseCategory = typeof allCategoryFilter | (typeof categoryLabels)[number];
 type TalentFilter = typeof allTalentFilter | (typeof talentLabels)[number];
+type OperatingFilter = typeof allOperatingFilter | (typeof operatingLabels)[number];
 
 type Summary = {
   label: string;
@@ -30,6 +33,7 @@ type ResolvedExpenseRow = {
   category: (typeof categoryLabels)[number];
   categoryDetail: string;
   talentType?: (typeof talentLabels)[number];
+  operatingType?: (typeof operatingLabels)[number];
   cardUser: string;
 };
 
@@ -77,6 +81,38 @@ function includesAny(text: string, keywords: string[]) {
   return keywords.some((keyword) => text.includes(normalizeText(keyword)));
 }
 
+function hasExplicitTalentMarker(row: Transaction) {
+  const text = normalizeText([
+    row.mainCategory,
+    row.subCategory,
+    row.detailCategory,
+    row.description,
+    row.memo
+  ].filter(Boolean).join(" "));
+
+  return includesAny(text, [
+    "인투1",
+    "인투2",
+    "인투3",
+    "인투4",
+    "인투5",
+    "인투6",
+    "인투집",
+    "인투차",
+    "인투밥",
+    "인투돈",
+    "인투몸",
+    "인투성장",
+    "인투환경",
+    "인재투자1",
+    "인재투자2",
+    "인재투자3",
+    "인재투자4",
+    "인재투자5",
+    "인재투자6"
+  ]);
+}
+
 function resolveTalentType(row: Transaction): (typeof talentLabels)[number] | undefined {
   const categoryText = normalizeText([
     row.talentInvestmentType,
@@ -93,12 +129,12 @@ function resolveTalentType(row: Transaction): (typeof talentLabels)[number] | un
   if (includesAny(categoryText, ["인투5", "투자5", "인재투자5", "인투성장", "투자성장", "교육", "출장", "숙박", "플랫폼", "openai", "gemini", "kling", "ai"])) return "인투5 성장";
   if (includesAny(categoryText, ["인투6", "투자6", "인재투자6", "인투환경", "투자환경", "사무용품", "소모품", "통신비", "공과금", "전력비", "인터넷", "정수기", "보안"])) return "인투6 환경";
 
-  if (includesAny(explicitText, ["인투1", "투자1", "인재투자1"])) return "인투1 집";
-  if (includesAny(explicitText, ["인투2", "투자2", "인재투자2"])) return "인투2 차";
-  if (includesAny(explicitText, ["인투3", "투자3", "인재투자3"])) return "인투3 밥";
-  if (includesAny(explicitText, ["인투4", "투자4", "인재투자4"])) return "인투4 돈";
-  if (includesAny(explicitText, ["인투5", "투자5", "인재투자5"])) return "인투5 성장";
-  if (includesAny(explicitText, ["인투6", "투자6", "인재투자6"])) return "인투6 환경";
+  if (includesAny(explicitText, ["인투1", "투자1", "인재투자1", "인투집", "투자집"])) return "인투1 집";
+  if (includesAny(explicitText, ["인투2", "투자2", "인재투자2", "인투차", "투자차"])) return "인투2 차";
+  if (includesAny(explicitText, ["인투3", "투자3", "인재투자3", "인투밥", "투자밥"])) return "인투3 밥";
+  if (includesAny(explicitText, ["인투4", "투자4", "인재투자4", "인투돈", "투자돈", "인투몸", "투자몸"])) return "인투4 돈";
+  if (includesAny(explicitText, ["인투5", "투자5", "인재투자5", "인투성장", "투자성장"])) return "인투5 성장";
+  if (includesAny(explicitText, ["인투6", "투자6", "인재투자6", "인투환경", "투자환경"])) return "인투6 환경";
 
   return undefined;
 }
@@ -106,6 +142,7 @@ function resolveTalentType(row: Transaction): (typeof talentLabels)[number] | un
 function resolveCategory(row: Transaction, talentType?: (typeof talentLabels)[number]) {
   const text = rowText(row);
   const isBankWithdrawal = row.source === "은행";
+  const isExplicitTalent = Boolean(talentType && hasExplicitTalentMarker(row));
 
   if (isBankWithdrawal && includesAny(text, ["환불", "매출취소", "결제취소", "용역수수료지급"])) {
     return {
@@ -138,6 +175,13 @@ function resolveCategory(row: Transaction, talentType?: (typeof talentLabels)[nu
             : includesAny(text, ["위픽코퍼레이션"]) ? "위픽코퍼레이션"
               : includesAny(text, ["바나나몽키"]) ? "바나나몽키"
                 : "광고비"
+    };
+  }
+
+  if (isExplicitTalent && talentType) {
+    return {
+      category: "인재투자" as const,
+      detail: talentType
     };
   }
 
@@ -199,6 +243,17 @@ function resolveActiveTalent(value: string | undefined): TalentFilter {
   return allTalentFilter;
 }
 
+function resolveActiveOperating(value: string | undefined): OperatingFilter {
+  if (!value) return allOperatingFilter;
+  if (operatingLabels.includes(value as (typeof operatingLabels)[number])) return value as OperatingFilter;
+
+  const normalized = normalizeText(value);
+  if (includesAny(normalized, ["이자", "대출이자"])) return "이자";
+  if (includesAny(normalized, ["일반운영비", "운영비", "일반"])) return "일반운영비";
+
+  return allOperatingFilter;
+}
+
 function resolveCardUser(row: Transaction) {
   if (row.source !== "카드") return nonCardUserFilter;
   return row.cardIssuer || row.cardBudgetGroup || unknownCardUserFilter;
@@ -225,15 +280,18 @@ function splitTalentLabel(label: string) {
 function expenseHref({
   category = allCategoryFilter,
   talent = allTalentFilter,
+  operating = allOperatingFilter,
   cardUser = allCardUserFilter
 }: {
   category?: ExpenseCategory;
   talent?: TalentFilter;
+  operating?: OperatingFilter;
   cardUser?: string;
 }) {
   const params = new URLSearchParams();
   if (category !== allCategoryFilter) params.set("category", category);
   if (category === "인재투자" && talent !== allTalentFilter) params.set("talent", talent);
+  if (category === "운영비" && operating !== allOperatingFilter) params.set("operating", operating);
   if (category === "인재투자" && cardUser !== allCardUserFilter) params.set("cardUser", cardUser);
   const query = params.toString();
 
@@ -277,25 +335,32 @@ function buildCardUserSummaries(rows: ResolvedExpenseRow[]) {
 export function ExpenseAnalysisClient({
   activeCategory: activeCategoryValue,
   activeTalent: activeTalentValue,
+  activeOperating: activeOperatingValue,
   activeCardUser: activeCardUserValue,
   expenseRows
 }: {
   activeCategory?: string;
   activeTalent?: string;
+  activeOperating?: string;
   activeCardUser?: string;
   expenseRows: Transaction[];
 }) {
   const activeCategory = resolveActiveCategory(activeCategoryValue, activeTalentValue);
   const activeTalent = activeCategory === "인재투자" ? resolveActiveTalent(activeTalentValue) : allTalentFilter;
+  const activeOperating = activeCategory === "운영비" ? resolveActiveOperating(activeOperatingValue) : allOperatingFilter;
   const resolvedRows: ResolvedExpenseRow[] = expenseRows.map((row) => {
     const talentType = resolveTalentType(row);
     const { category, detail } = resolveCategory(row, talentType);
+    const operatingType = category === "운영비"
+      ? detail === "이자" ? "이자" as const : "일반운영비" as const
+      : undefined;
 
     return {
       row,
       category,
       categoryDetail: detail,
       talentType,
+      operatingType,
       cardUser: resolveCardUser(row)
     };
   });
@@ -306,16 +371,20 @@ export function ExpenseAnalysisClient({
   const talentFilteredRows = activeCategory === "인재투자" && activeTalent !== allTalentFilter
     ? categoryFilteredRows.filter((item) => item.talentType === activeTalent)
     : categoryFilteredRows;
+  const detailFilteredRows = activeCategory === "운영비" && activeOperating !== allOperatingFilter
+    ? categoryFilteredRows.filter((item) => item.operatingType === activeOperating)
+    : talentFilteredRows;
   const canFilterByCardUser = activeCategory === "인재투자";
-  const cardUserSummaries = canFilterByCardUser ? buildCardUserSummaries(talentFilteredRows) : [];
+  const cardUserSummaries = canFilterByCardUser ? buildCardUserSummaries(detailFilteredRows) : [];
   const activeCardUser = canFilterByCardUser ? resolveActiveCardUser(activeCardUserValue, cardUserSummaries) : allCardUserFilter;
   const isCardUserFiltered = canFilterByCardUser && activeCardUser !== allCardUserFilter;
   const filteredRows = !canFilterByCardUser || activeCardUser === allCardUserFilter
-    ? talentFilteredRows
-    : talentFilteredRows.filter((item) => item.cardUser === activeCardUser);
+    ? detailFilteredRows
+    : detailFilteredRows.filter((item) => item.cardUser === activeCardUser);
   const filteredTotal = sumResolvedAmount(filteredRows);
   const categorySummaries = buildSummaries(categoryLabels, resolvedRows, (item) => item.category);
   const talentSummaries = buildSummaries(talentLabels, resolvedRows.filter((item) => item.category === "인재투자"), (item) => item.talentType);
+  const operatingSummaries = buildSummaries(operatingLabels, resolvedRows.filter((item) => item.category === "운영비"), (item) => item.operatingType);
 
   return (
     <>
@@ -360,7 +429,11 @@ export function ExpenseAnalysisClient({
             <div className="eyebrow">현재 상세 필터</div>
             <div className="mt-2 text-2xl font-black text-slate-950">{activeCategory}</div>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              {activeCategory === "인재투자" ? `하위유형: ${activeTalent}` : "대카테고리 기준으로 표시 중입니다."}
+              {activeCategory === "인재투자"
+                ? `하위유형: ${activeTalent}`
+                : activeCategory === "운영비"
+                  ? `보조유형: ${activeOperating}`
+                  : "대카테고리 기준으로 표시 중입니다."}
               {canFilterByCardUser ? (
                 <>
                   <br />
@@ -423,6 +496,42 @@ export function ExpenseAnalysisClient({
         </section>
       ) : null}
 
+      {activeCategory === "운영비" ? (
+        <section className="card mb-6">
+          <div className="mb-4 flex items-start justify-between gap-4 max-md:flex-col">
+            <div>
+              <h2 className="section-title">운영비 보조 구분</h2>
+              <p className="mt-1 text-sm text-slate-500">운영비는 일반운영비와 이자로 나누어 조회합니다.</p>
+            </div>
+            <a className="btn btn-sm" href={expenseHref({ category: "운영비" })}>전체 운영비</a>
+          </div>
+          <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
+            {operatingSummaries.map((summary) => {
+              const selected = activeOperating === summary.label;
+
+              return (
+                <a
+                  className={[
+                    "rounded-lg border p-4 text-left transition",
+                    selected ? "border-blue-500 bg-blue-50 ring-1 ring-blue-100" : "border-slate-200 bg-white hover:border-blue-200"
+                  ].join(" ")}
+                  href={expenseHref({ category: "운영비", operating: summary.label as OperatingFilter })}
+                  key={summary.label}
+                  aria-current={selected ? "true" : undefined}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className={selected ? "badge" : "badge badge-muted"}>{summary.label}</span>
+                    <span className="text-xs font-black text-slate-400">{formatPercent(summary.share)}</span>
+                  </div>
+                  <div className="mt-2 text-base font-black text-slate-950">{formatKRW(summary.amount)}</div>
+                  <div className="mt-1 text-xs text-slate-500">{summary.count.toLocaleString("ko-KR")}건</div>
+                </a>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
       <section className="card" id="expense-detail">
         <div className="mb-4 flex items-start justify-between gap-4 max-md:flex-col">
           <div>
@@ -430,12 +539,14 @@ export function ExpenseAnalysisClient({
             <p className="mt-1 text-sm text-slate-500">
               {activeCategory === allCategoryFilter ? "전체 지출" : activeCategory}
               {activeCategory === "인재투자" && activeTalent !== allTalentFilter ? ` · ${activeTalent}` : ""}
+              {activeCategory === "운영비" && activeOperating !== allOperatingFilter ? ` · ${activeOperating}` : ""}
               {canFilterByCardUser ? ` 중 ${activeCardUser} 기준` : " 기준"} {filteredRows.length.toLocaleString("ko-KR")}건을 표시합니다.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="badge">{activeCategory}</span>
             {activeCategory === "인재투자" ? <span className="badge">{activeTalent}</span> : null}
+            {activeCategory === "운영비" ? <span className="badge">{activeOperating}</span> : null}
             {canFilterByCardUser ? <span className="badge">{activeCardUser}</span> : null}
             <span className="badge badge-muted">{formatKRW(filteredTotal)}</span>
           </div>
@@ -456,7 +567,7 @@ export function ExpenseAnalysisClient({
               ].join(" ")}
               href={expenseHref({ category: activeCategory, talent: activeTalent })}
             >
-              전체 카드사 {talentFilteredRows.length.toLocaleString("ko-KR")}건
+              전체 카드사 {detailFilteredRows.length.toLocaleString("ko-KR")}건
             </a>
           </div>
 
@@ -540,7 +651,7 @@ export function ExpenseAnalysisClient({
           <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
             <div className="font-black text-slate-950">표시할 지출 상세가 없습니다.</div>
             <p className="mt-2 text-sm text-slate-500">다른 지출유형{canFilterByCardUser ? "이나 카드사/사용자 필터" : ""}을 선택해 주세요.</p>
-            <a className="btn mt-4" href={expenseHref({ category: activeCategory, talent: activeTalent })}>
+            <a className="btn mt-4" href={expenseHref({ category: activeCategory, talent: activeTalent, operating: activeOperating })}>
               {canFilterByCardUser ? "카드사 필터 해제" : "현재 유형 다시 보기"}
             </a>
           </div>
