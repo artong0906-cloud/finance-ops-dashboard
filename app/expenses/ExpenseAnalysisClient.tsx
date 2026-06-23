@@ -175,6 +175,7 @@ export function ExpenseAnalysisClient({
     : resolvedRows.filter((item) => item.talentType === activeFilter);
   const cardUserSummaries = buildCardUserSummaries(talentFilteredRows);
   const activeCardUser = resolveActiveCardUser(activeCardUserValue, cardUserSummaries);
+  const isCardUserFiltered = activeCardUser !== allCardUserFilter;
   const filteredRows = activeCardUser === allCardUserFilter
     ? talentFilteredRows
     : talentFilteredRows.filter((item) => item.cardUser === activeCardUser);
@@ -292,29 +293,35 @@ export function ExpenseAnalysisClient({
               전체 카드사 {talentFilteredRows.length.toLocaleString("ko-KR")}건
             </a>
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {cardUserSummaries.map((summary) => {
-              const selected = activeCardUser === summary.label;
 
-              return (
-                <a
-                  className={[
-                    "rounded-full border px-3 py-2 text-xs font-black transition",
-                    selected
-                      ? "border-blue-500 bg-blue-50 text-blue-700 ring-1 ring-blue-100"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700"
-                  ].join(" ")}
-                  href={expenseHref(activeFilter, summary.label)}
-                  key={summary.label}
-                  aria-current={selected ? "true" : undefined}
-                >
-                  {summary.label}
-                  <span className="ml-2 text-slate-400">{summary.count.toLocaleString("ko-KR")}건</span>
-                  <span className="ml-2 text-slate-400">{formatKRW(summary.amount)}</span>
-                </a>
-              );
-            })}
-          </div>
+          <details className="mt-4 rounded-lg border border-slate-200 bg-white" open={isCardUserFiltered}>
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 text-sm font-black text-slate-800 max-md:flex-col max-md:items-start">
+              <span>{isCardUserFiltered ? activeCardUser : "카드사/사용자 선택 열기"}</span>
+              <span className="badge badge-muted">
+                {cardUserSummaries.length.toLocaleString("ko-KR")}개 카드사
+              </span>
+            </summary>
+            <form action="/expenses#expense-detail" className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 border-t border-slate-100 p-4 max-md:grid-cols-1" method="get">
+              {activeFilter !== allFilter ? <input name="talent" type="hidden" value={activeFilter} /> : null}
+              <label className="grid gap-2 text-sm font-bold text-slate-700">
+                카드사/사용자
+                <select className="field" defaultValue={isCardUserFiltered ? activeCardUser : ""} name="cardUser">
+                  <option value="">전체 카드사</option>
+                  {cardUserSummaries.map((summary) => (
+                    <option key={summary.label} value={summary.label}>
+                      {summary.label} · {summary.count.toLocaleString("ko-KR")}건 · {formatKRW(summary.amount)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="btn btn-primary self-end" type="submit">
+                조회
+              </button>
+              <a className="btn self-end" href={expenseHref(activeFilter)}>
+                해제
+              </a>
+            </form>
+          </details>
         </div>
 
         {filteredRows.length > 0 ? (
