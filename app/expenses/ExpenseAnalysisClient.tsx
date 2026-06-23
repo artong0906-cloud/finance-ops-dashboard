@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { formatKRW } from "@/services/dashboard/calculations";
 import type { Transaction } from "@/types/finance";
 
@@ -49,12 +48,11 @@ function resolveTalentType(row: Transaction): (typeof talentLabels)[number] | un
     row.subCategory,
     row.detailCategory
   ].filter(Boolean).join(" "));
-  const fullText = normalizeTalentText([
+  const explicitText = normalizeTalentText([
     row.talentInvestmentType,
     row.mainCategory,
     row.subCategory,
     row.detailCategory,
-    row.vendor,
     row.description,
     row.memo
   ].filter(Boolean).join(" "));
@@ -66,12 +64,12 @@ function resolveTalentType(row: Transaction): (typeof talentLabels)[number] | un
   if (includesAny(categoryText, ["인투5", "투자5", "인재투자5", "인투성장", "투자성장", "교육", "출장", "숙박", "플랫폼", "openai", "gemini", "kling", "ai"])) return "인투5 성장";
   if (includesAny(categoryText, ["인투6", "투자6", "인재투자6", "인투환경", "투자환경", "사무용품", "소모품", "통신비", "공과금", "전력비", "인터넷", "정수기", "보안"])) return "인투6 환경";
 
-  if (includesAny(fullText, ["인투1", "투자1", "인재투자1", "사택", "월세", "지급임차료"])) return "인투1 집";
-  if (includesAny(fullText, ["인투2", "투자2", "인재투자2", "법인차량", "차량리스", "리스료", "주유", "주차", "통행료", "고속도로"])) return "인투2 차";
-  if (includesAny(fullText, ["인투3", "투자3", "인재투자3", "식대", "간식", "커피", "카페", "편의점", "한식"])) return "인투3 밥";
-  if (includesAny(fullText, ["인투4", "투자4", "인재투자4", "복지포인트", "내일채움", "일자리공제", "4대보험", "보험료"])) return "인투4 돈";
-  if (includesAny(fullText, ["인투5", "투자5", "인재투자5", "교육훈련", "교육", "출장", "숙박", "플랫폼", "openai", "gemini", "kling", "클링", "재미나이"])) return "인투5 성장";
-  if (includesAny(fullText, ["인투6", "투자6", "인재투자6", "환경용품", "사무용품", "소모품", "통신비", "공과금", "전력비", "인터넷", "정수기", "보안"])) return "인투6 환경";
+  if (includesAny(explicitText, ["인투1", "투자1", "인재투자1"])) return "인투1 집";
+  if (includesAny(explicitText, ["인투2", "투자2", "인재투자2"])) return "인투2 차";
+  if (includesAny(explicitText, ["인투3", "투자3", "인재투자3"])) return "인투3 밥";
+  if (includesAny(explicitText, ["인투4", "투자4", "인재투자4"])) return "인투4 돈";
+  if (includesAny(explicitText, ["인투5", "투자5", "인재투자5"])) return "인투5 성장";
+  if (includesAny(explicitText, ["인투6", "투자6", "인재투자6"])) return "인투6 환경";
 
   return undefined;
 }
@@ -145,7 +143,7 @@ export function ExpenseAnalysisClient({
             const { code, name } = splitTalentLabel(summary.label);
 
             return (
-              <Link
+              <a
                 className={[
                   "card kpi cursor-pointer p-4 text-left transition",
                   selected ? "border-blue-500 bg-blue-50 shadow-sm ring-1 ring-blue-100" : "hover:border-blue-200 hover:bg-slate-50"
@@ -167,7 +165,7 @@ export function ExpenseAnalysisClient({
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
                   <div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.min(100, summary.share)}%` }} />
                 </div>
-              </Link>
+              </a>
             );
           })}
         </div>
@@ -192,9 +190,9 @@ export function ExpenseAnalysisClient({
               <div className="mt-2 font-black text-slate-950">{filteredRows.length.toLocaleString("ko-KR")}건</div>
             </div>
           </div>
-          <Link className="btn w-full" href={filterHref(allFilter)}>
+          <a className="btn w-full" href={filterHref(allFilter)}>
             전체 지출 보기
-          </Link>
+          </a>
         </aside>
       </section>
 
@@ -271,9 +269,9 @@ export function ExpenseAnalysisClient({
           <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
             <div className="font-black text-slate-950">표시할 지출 상세가 없습니다.</div>
             <p className="mt-2 text-sm text-slate-500">다른 인투 카드를 선택하거나 전체 지출 보기로 돌아가세요.</p>
-            <Link className="btn mt-4" href={filterHref(allFilter)}>
+            <a className="btn mt-4" href={filterHref(allFilter)}>
               전체 지출 보기
-            </Link>
+            </a>
           </div>
         )}
       </section>
