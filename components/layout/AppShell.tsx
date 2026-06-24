@@ -18,11 +18,11 @@ import { getAllowedUser } from "@/lib/auth/session";
 
 const nav: { href: string; label: string; kicker: string; icon: LucideIcon }[] = [
   { href: "/dashboard", label: "경영현황", kicker: "Overview", icon: Gauge },
-  { href: "/bank", label: "통장 입출금", kicker: "Cash", icon: Landmark },
   { href: "/revenue", label: "매출 분석", kicker: "Revenue", icon: TrendingUp },
-  { href: "/cards", label: "카드 사용내역", kicker: "Cards", icon: CreditCard },
   { href: "/expenses", label: "지출 분석", kicker: "Expense", icon: BarChart3 },
   { href: "/balance", label: "자산/부채", kicker: "Balance", icon: WalletCards },
+  { href: "/bank", label: "통장 입출금", kicker: "Cash", icon: Landmark },
+  { href: "/cards", label: "카드 사용내역", kicker: "Cards", icon: CreditCard },
   { href: "/uploads", label: "업로드 검증", kicker: "Review", icon: FileUp },
   { href: "/admin", label: "관리자", kicker: "Admin", icon: Settings }
 ];

@@ -443,7 +443,7 @@ export default async function DashboardPage() {
           <KpiCard caption={`자산 대비 자본 ${percent(equity, totalAssets)}`} icon={<WalletCards size={19} />} label="자본" tone="slate" value={formatCompactKRW(equity)} />
         </section>
 
-        <section className="grid grid-cols-[minmax(0,1.15fr)_minmax(360px,.85fr)] items-stretch gap-4 max-xl:grid-cols-1">
+        <section className="grid grid-cols-2 items-stretch gap-4 max-xl:grid-cols-1">
           <div className="card h-full">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
