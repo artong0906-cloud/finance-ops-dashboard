@@ -449,7 +449,7 @@ export function ExpenseAnalysisClient({
 
   return (
     <>
-      <section className="mb-6 grid grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
+      <section className="mb-6 grid items-start grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
         <div className="grid self-start auto-rows-max grid-cols-7 gap-2.5 max-2xl:grid-cols-4 max-lg:grid-cols-2 max-md:grid-cols-1">
           {categorySummaries.map((summary, index) => {
             const selected = activeCategory === summary.label;

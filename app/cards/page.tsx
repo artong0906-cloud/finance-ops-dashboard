@@ -46,8 +46,8 @@ export default async function CardsPage() {
         <SummaryBox caption="5월 임시 귀속" label="집계 기준" tone="teal" value="광고사업부" />
       </section>
 
-      <section className="mb-6 grid grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
-        <div className="card">
+      <section className="mb-6 grid items-start grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
+        <div className="card self-start">
           <div className="mb-4 flex items-start justify-between gap-4 max-md:flex-col">
             <div>
               <h2 className="section-title">주요 분류별 사용액</h2>

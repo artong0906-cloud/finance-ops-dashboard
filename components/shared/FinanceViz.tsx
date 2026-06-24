@@ -58,7 +58,7 @@ export function DonutPanel({
   const total = sumBy(segments, (segment) => segment.amount);
 
   return (
-    <div className="h-full w-full min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3" style={{ maxWidth: "100%" }}>
+    <div className="h-fit w-full min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3" style={{ maxWidth: "100%" }}>
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="text-sm font-black text-slate-950">{title}</h3>
         <span className="badge badge-muted">{segments.length.toLocaleString("ko-KR")}개</span>

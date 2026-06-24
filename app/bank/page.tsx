@@ -43,8 +43,8 @@ export default async function BankPage() {
         <SummaryBox caption="입금 - 출금" label="순현금흐름" value={formatKRW(netCashFlow)} />
       </section>
 
-      <section className="mb-6 grid grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
-        <div className="card">
+      <section className="mb-6 grid items-start grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
+        <div className="card self-start">
           <div className="mb-4 flex items-start justify-between gap-4 max-md:flex-col">
             <div>
               <h2 className="section-title">계좌별 현금 잔고</h2>

@@ -346,8 +346,8 @@ export default async function BalancePage() {
         <DonutPanel segments={liabilitySegments} title="부채 구성" totalLabel="총부채" totalValue={formatCompactKRW(totalLiabilities)} />
       </section>
 
-      <section className="mb-6 grid grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
-        <div className="card">
+      <section className="mb-6 grid items-start grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
+        <div className="card self-start">
           <h2 className="section-title">월별 업데이트 방식</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             초기 운영은 자료 업로드의 <b>자산·부채 증감</b> 파일로 매월 기초·증가·감소를 교체 저장합니다. 차량은 차량명, 보증금은 물건명, 유형자산은 비품·토지명처럼 항목 단위로 올리면 화면도 같은 단위로 표시됩니다.
