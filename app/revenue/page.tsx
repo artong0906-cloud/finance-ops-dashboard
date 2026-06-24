@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { AppShell } from "@/components/layout/AppShell";
-import { chartColors, DonutPanel, RankBar, SummaryBox } from "@/components/shared/FinanceViz";
+import { chartColors, DonutPanel, RankBar } from "@/components/shared/FinanceViz";
 import { formatCompactKRW, formatKRW } from "@/services/dashboard/calculations";
 import { getDashboardData } from "@/services/dashboard/liveData";
 import type { Transaction } from "@/types/finance";
@@ -179,38 +179,6 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
       periodLabel={data.currentMonth || "2026-05"}
       activePath="/revenue"
     >
-      <section className="card mb-5">
-        <div className="flex items-start justify-between gap-4 max-lg:flex-col">
-          <div>
-            <h2 className="section-title">매출 분류 기준</h2>
-            <p className="mt-2 max-w-5xl text-sm leading-6 text-slate-600">
-              5월은 모든 입금이 한 통장으로 들어왔기 때문에 기본값은 광고사업부 매출입니다.
-              정부지원금과 기타매출 키워드는 별도 분리하고, 대출실행 입금은 매출 후보에서 제외합니다.
-            </p>
-          </div>
-          <span className="badge badge-muted">5월 시뮬레이션</span>
-        </div>
-        <div className="mt-4 grid grid-cols-3 gap-3 max-md:grid-cols-1">
-          <SummaryBox
-            caption={`${revenueRows.length.toLocaleString("ko-KR")}건`}
-            label="매출 후보"
-            tone="teal"
-            value={formatKRW(totalRevenue)}
-          />
-          <SummaryBox
-            caption={`${filteredRows.length.toLocaleString("ko-KR")}건 표시`}
-            label="현재 선택 금액"
-            value={formatKRW(filteredTotal)}
-          />
-          <SummaryBox
-            caption="대출실행 입금은 제외"
-            label="주요 분리 기준"
-            tone="stone"
-            value={activeFilter === allFilter ? "전체 보기" : activeFilter}
-          />
-        </div>
-      </section>
-
       <section className="mb-6 grid grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
         <div className="card">
           <div className="mb-4 flex items-start justify-between gap-4 max-md:flex-col">

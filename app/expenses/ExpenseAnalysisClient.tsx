@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
-import { chartColors, DonutPanel, SummaryBox } from "@/components/shared/FinanceViz";
+import { chartColors, DonutPanel } from "@/components/shared/FinanceViz";
 import { formatKRW } from "@/services/dashboard/calculations";
 import type { Transaction } from "@/types/finance";
 
@@ -449,40 +449,8 @@ export function ExpenseAnalysisClient({
 
   return (
     <>
-      <section className="card mb-5">
-        <div className="flex items-start justify-between gap-4 max-lg:flex-col">
-          <div>
-            <h2 className="section-title">지출 분류 기준</h2>
-            <p className="mt-2 max-w-5xl text-sm leading-6 text-slate-600">
-              지출을 인재투자, 환불, 급여, 광고비, 세금, 운영비, 기타 대카테고리로 먼저 나누고,
-              인재투자 안에서만 인투1~6과 카드사/사용자 기준을 다시 조회합니다.
-            </p>
-          </div>
-          <span className="badge badge-muted">5월 실데이터</span>
-        </div>
-        <div className="mt-4 grid grid-cols-3 gap-3 max-md:grid-cols-1">
-          <SummaryBox
-            caption={`${resolvedRows.length.toLocaleString("ko-KR")}건`}
-            label="전체 지출"
-            tone="stone"
-            value={formatKRW(totalExpense)}
-          />
-          <SummaryBox
-            caption={`${filteredRows.length.toLocaleString("ko-KR")}건 표시`}
-            label="현재 선택 금액"
-            value={formatKRW(filteredTotal)}
-          />
-          <SummaryBox
-            caption={activeCategory === "인재투자" ? activeTalent : activeCategory === "운영비" ? activeOperating : "대카테고리"}
-            label="현재 기준"
-            tone="teal"
-            value={activeCategory}
-          />
-        </div>
-      </section>
-
       <section className="mb-6 grid grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
-        <div className="grid grid-cols-7 gap-3 max-2xl:grid-cols-4 max-lg:grid-cols-2 max-md:grid-cols-1">
+        <div className="grid self-start auto-rows-max grid-cols-7 gap-2.5 max-2xl:grid-cols-4 max-lg:grid-cols-2 max-md:grid-cols-1">
           {categorySummaries.map((summary, index) => {
             const selected = activeCategory === summary.label;
             const color = chartColors[index % chartColors.length];
@@ -490,8 +458,8 @@ export function ExpenseAnalysisClient({
             return (
               <button
                 className={[
-                  "rounded-lg border bg-white p-4 text-left transition",
-                  selected ? "shadow-sm ring-1 ring-slate-200" : "hover:border-slate-300 hover:bg-slate-50"
+                  "min-h-[118px] self-start rounded-lg border bg-white p-3 text-left transition",
+                  selected ? "bg-slate-50 shadow-sm ring-1 ring-slate-200" : "hover:border-slate-300 hover:bg-slate-50"
                 ].join(" ")}
                 key={summary.label}
                 onClick={() => applyFilters({ category: summary.label as ExpenseCategory })}
@@ -503,12 +471,12 @@ export function ExpenseAnalysisClient({
                   <span className={selected ? "badge" : "badge badge-muted"}>{summary.label}</span>
                   <span className="text-xs font-black text-slate-400">{formatPercent(summary.share)}</span>
                 </div>
-                <div className="mt-4 text-lg font-black text-slate-950">{formatKRW(summary.amount)}</div>
-                <div className="mt-2 flex items-center justify-between gap-3 text-xs text-slate-500">
+                <div className="mt-3 text-base font-black text-slate-950">{formatKRW(summary.amount)}</div>
+                <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-slate-500">
                   <span>{summary.count.toLocaleString("ko-KR")}건</span>
                   <span>{selected ? "선택됨" : "조회"}</span>
                 </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
                   <div className="h-full rounded-full" style={{ width: `${Math.min(100, summary.share)}%`, backgroundColor: color }} />
                 </div>
               </button>
