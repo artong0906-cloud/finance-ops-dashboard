@@ -82,7 +82,9 @@ export function UploadWorkspace() {
       rawRows: preview.rowCount,
       okRows: normalized.filter((row) => row.parseStatus === "정상").length,
       reviewRows: normalized.filter((row) => row.parseStatus !== "정상").length,
-      transactionRows: uploadType === "balance" ? 0 : normalized.filter((row) => row.transaction).length
+      transactionRows: uploadType === "balance"
+        ? normalized.filter((row) => row.balanceMovement).length
+        : normalized.filter((row) => row.transaction).length
     };
   }, [preview, uploadType]);
 
@@ -153,7 +155,9 @@ export function UploadWorkspace() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "업로드 저장에 실패했습니다.");
-      setMessage(`저장 완료: 원본 ${result.rawRowCount.toLocaleString("ko-KR")}행 / 거래 ${result.transactionCount.toLocaleString("ko-KR")}건 생성 / 확인필요 ${result.needReviewCount.toLocaleString("ko-KR")}건`);
+      const savedCount = uploadType === "balance" ? result.balanceMovementCount || 0 : result.transactionCount || 0;
+      const savedLabel = uploadType === "balance" ? "자산·부채 증감" : "거래";
+      setMessage(`저장 완료: 원본 ${result.rawRowCount.toLocaleString("ko-KR")}행 / ${savedLabel} ${savedCount.toLocaleString("ko-KR")}건 생성 / 확인필요 ${result.needReviewCount.toLocaleString("ko-KR")}건`);
       setPreview(null);
       setFile(null);
       const input = document.getElementById("upload-file-input") as HTMLInputElement | null;
@@ -237,7 +241,7 @@ export function UploadWorkspace() {
           <div className="card"><div className="eyebrow">원본 행</div><div className="metric-value mt-2">{stats.rawRows.toLocaleString("ko-KR")}</div></div>
           <div className="card"><div className="eyebrow">자동 인식 정상</div><div className="metric-value mt-2 text-emerald-700">{stats.okRows.toLocaleString("ko-KR")}</div></div>
           <div className="card"><div className="eyebrow">확인 필요</div><div className="metric-value mt-2 text-amber-700">{stats.reviewRows.toLocaleString("ko-KR")}</div></div>
-          <div className="card"><div className="eyebrow">거래 생성 예정</div><div className="metric-value mt-2 text-blue-700">{stats.transactionRows.toLocaleString("ko-KR")}</div></div>
+          <div className="card"><div className="eyebrow">{uploadType === "balance" ? "증감 생성 예정" : "거래 생성 예정"}</div><div className="metric-value mt-2 text-blue-700">{stats.transactionRows.toLocaleString("ko-KR")}</div></div>
         </section>
       ) : null}
 

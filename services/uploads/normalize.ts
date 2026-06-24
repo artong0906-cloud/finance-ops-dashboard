@@ -24,6 +24,16 @@ export type NormalizedTransaction = {
   memo: string | null;
 };
 
+export type NormalizedBalanceMovement = {
+  month: string;
+  statement_type: "자산" | "부채";
+  category: string;
+  opening_amount: number;
+  increase_amount: number;
+  decrease_amount: number;
+  memo: string | null;
+};
+
 export type NormalizedUploadRow = {
   rowIndex: number;
   rawData: Record<string, string>;
@@ -31,9 +41,17 @@ export type NormalizedUploadRow = {
   parseStatus: "정상" | "확인필요" | "오류";
   memo: string | null;
   transaction: NormalizedTransaction | null;
+  balanceMovement: NormalizedBalanceMovement | null;
 };
 
 const dateKeys = ["거래일자", "거래일시", "거래일", "거래일자(년월일)", "승인일자", "이용일자", "사용일자", "전표일자", "일자", "날짜", "date"];
+const monthKeys = ["월", "기준월", "집계월", "마감월", "month", "기간"];
+const statementTypeKeys = ["구분", "재무구분", "자산부채구분", "statement_type"];
+const balanceCategoryKeys = ["항목", "계정", "계정과목", "분류", "자산항목", "부채항목", "category"];
+const openingAmountKeys = ["기초", "기초금액", "전월말", "전월잔액", "opening_amount"];
+const increaseAmountKeys = ["증가", "증가금액", "당월증가", "차변", "increase_amount"];
+const decreaseAmountKeys = ["감소", "감소금액", "당월감소", "대변", "decrease_amount"];
+const balanceMemoKeys = ["메모", "비고", "상세", "세부항목", "적요", "memo"];
 const vendorKeys = ["거래처", "가맹점명", "사용처", "상호", "업체명", "거래상대방", "받는분", "보내는분", "예금주", "상대계좌예금주명", "상대예금주명", "vendor"];
 const descriptionKeys = ["적요", "거래내용", "기재내용", "내용", "내역", "거래구분", "거래명", "비고", "품목", "메모", "입금의뢰인", "출금계좌인자내용", "description"];
 const amountKeys = ["금액", "거래금액", "거래 금액", "승인금액", "이용금액", "사용금액", "합계", "amount"];
@@ -107,6 +125,34 @@ function normalizeDate(value: string) {
   return "";
 }
 
+function normalizeMonth(value: string) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const match = raw.match(/(20\d{2}|19\d{2})[.\-/년\s]*(\d{1,2})/);
+  if (match) {
+    const [, y, m] = match;
+    return `${y}-${m.padStart(2, "0")}`;
+  }
+
+  const date = normalizeDate(raw);
+  return date ? date.slice(0, 7) : "";
+}
+
+function normalizeStatementType(value: string) {
+  const raw = String(value || "").trim();
+  if (raw.includes("부채")) return "부채" as const;
+  if (raw.includes("자산")) return "자산" as const;
+  return null;
+}
+
+function normalizeBalanceCategory(value: string) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/토지|비품|차량|건물|시설|전자칠판|나스|장비|집기/.test(raw)) return raw.replace(/무형자산/g, "유형자산");
+  return raw;
+}
+
 function normalizeBusinessUnit(value: string): NormalizedTransaction["business_unit"] {
   if (value.includes("플랫폼")) return "플랫폼";
   if (value.includes("대외")) return "대외협력";
@@ -149,8 +195,67 @@ function inferMemo(missing: string[]) {
   return `자동 인식 필요: ${missing.join(", ")}`;
 }
 
+function normalizeBalanceRow(row: Record<string, string>) {
+  const month = normalizeMonth(pick(row, monthKeys) || pick(row, dateKeys));
+  const statementType = normalizeStatementType(pick(row, statementTypeKeys));
+  const category = normalizeBalanceCategory(pick(row, balanceCategoryKeys));
+  const openingAmount = parseAmount(pick(row, openingAmountKeys));
+  const increaseAmount = parseAmount(pick(row, increaseAmountKeys));
+  const decreaseAmount = parseAmount(pick(row, decreaseAmountKeys));
+  const memo = pick(row, balanceMemoKeys) || null;
+
+  const missing: string[] = [];
+  if (!hasLikelyTransactionSignal(row)) missing.push("거래행 아님");
+  if (!month) missing.push("기준월");
+  if (!statementType) missing.push("자산/부채 구분");
+  if (!category) missing.push("항목");
+
+  const parseStatus: NormalizedUploadRow["parseStatus"] = missing.length === 0 ? "정상" : "확인필요";
+  const baseMemo = inferMemo(missing);
+  const finalMemo = [memo, baseMemo].filter(Boolean).join(" / ") || null;
+
+  return {
+    parseStatus,
+    memo: finalMemo,
+    balanceMovement: month && statementType && category
+      ? {
+          month,
+          statement_type: statementType,
+          category,
+          opening_amount: openingAmount,
+          increase_amount: increaseAmount,
+          decrease_amount: decreaseAmount,
+          memo: finalMemo
+        }
+      : null,
+    normalizedData: {
+      month,
+      statement_type: statementType,
+      category,
+      opening_amount: openingAmount,
+      increase_amount: increaseAmount,
+      decrease_amount: decreaseAmount,
+      memo: finalMemo
+    }
+  };
+}
+
 export function normalizeUploadRows(uploadType: UploadType, rows: Record<string, string>[]): NormalizedUploadRow[] {
   return rows.map((row, index) => {
+    if (uploadType === "balance") {
+      const normalized = normalizeBalanceRow(row);
+
+      return {
+        rowIndex: index + 1,
+        rawData: row,
+        normalizedData: normalized.normalizedData,
+        parseStatus: normalized.parseStatus,
+        memo: normalized.memo,
+        transaction: null,
+        balanceMovement: normalized.balanceMovement
+      };
+    }
+
     const transactionDate = normalizeDate(pick(row, dateKeys));
     const vendor = pick(row, vendorKeys) || null;
     const description = pick(row, descriptionKeys) || vendor || null;
@@ -229,7 +334,8 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
       },
       parseStatus,
       memo,
-      transaction
+      transaction,
+      balanceMovement: null
     };
   });
 }

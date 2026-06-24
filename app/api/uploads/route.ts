@@ -163,10 +163,36 @@ export async function POST(request: NextRequest) {
         review_status: transaction.review_status,
         memo: transaction.memo
       }));
+    const balanceMovementRows = uploadType === "balance" ? normalizedRows
+      .map((row) => row.balanceMovement)
+      .filter((movement): movement is NonNullable<typeof movement> => Boolean(movement))
+      .map((movement) => ({
+        month: movement.month,
+        statement_type: movement.statement_type,
+        category: movement.category,
+        opening_amount: movement.opening_amount,
+        increase_amount: movement.increase_amount,
+        decrease_amount: movement.decrease_amount,
+        memo: movement.memo
+      })) : [];
 
     for (let i = 0; i < transactionRows.length; i += 500) {
       const { error } = await admin.from("transactions").insert(transactionRows.slice(i, i + 500));
       if (error) throw error;
+    }
+
+    if (balanceMovementRows.length > 0) {
+      const months = Array.from(new Set(balanceMovementRows.map((row) => row.month)));
+      const { error: deleteError } = await admin
+        .from("balance_movements")
+        .delete()
+        .in("month", months);
+      if (deleteError) throw deleteError;
+
+      for (let i = 0; i < balanceMovementRows.length; i += 500) {
+        const { error } = await admin.from("balance_movements").insert(balanceMovementRows.slice(i, i + 500));
+        if (error) throw error;
+      }
     }
 
     return NextResponse.json({
@@ -174,6 +200,7 @@ export async function POST(request: NextRequest) {
       batch,
       rawRowCount: rows.length,
       transactionCount: transactionRows.length,
+      balanceMovementCount: balanceMovementRows.length,
       needReviewCount: normalizedRows.filter((row) => row.parseStatus !== "정상" || row.transaction?.review_status === "확인필요").length,
       rawRowsTableReady: hasRawRows
     });
