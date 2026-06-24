@@ -1,3 +1,6 @@
+"use client";
+
+import { useMemo, useState, type FormEvent } from "react";
 import { formatKRW } from "@/services/dashboard/calculations";
 import type { Transaction } from "@/types/finance";
 
@@ -345,10 +348,15 @@ export function ExpenseAnalysisClient({
   activeCardUser?: string;
   expenseRows: Transaction[];
 }) {
-  const activeCategory = resolveActiveCategory(activeCategoryValue, activeTalentValue);
-  const activeTalent = activeCategory === "인재투자" ? resolveActiveTalent(activeTalentValue) : allTalentFilter;
-  const activeOperating = activeCategory === "운영비" ? resolveActiveOperating(activeOperatingValue) : allOperatingFilter;
-  const resolvedRows: ResolvedExpenseRow[] = expenseRows.map((row) => {
+  const [selectedCategory, setSelectedCategory] = useState<ExpenseCategory>(() => resolveActiveCategory(activeCategoryValue, activeTalentValue));
+  const [selectedTalent, setSelectedTalent] = useState<TalentFilter>(() => resolveActiveTalent(activeTalentValue));
+  const [selectedOperating, setSelectedOperating] = useState<OperatingFilter>(() => resolveActiveOperating(activeOperatingValue));
+  const [selectedCardUser, setSelectedCardUser] = useState(() => activeCardUserValue || allCardUserFilter);
+
+  const activeCategory = selectedCategory;
+  const activeTalent = activeCategory === "인재투자" ? selectedTalent : allTalentFilter;
+  const activeOperating = activeCategory === "운영비" ? selectedOperating : allOperatingFilter;
+  const resolvedRows: ResolvedExpenseRow[] = useMemo(() => expenseRows.map((row) => {
     const talentType = resolveTalentType(row);
     const { category, detail } = resolveCategory(row, talentType);
     const operatingType = category === "운영비"
@@ -363,28 +371,72 @@ export function ExpenseAnalysisClient({
       operatingType,
       cardUser: resolveCardUser(row)
     };
-  });
+  }), [expenseRows]);
 
-  const categoryFilteredRows = activeCategory === allCategoryFilter
+  const categoryFilteredRows = useMemo(() => activeCategory === allCategoryFilter
     ? resolvedRows
-    : resolvedRows.filter((item) => item.category === activeCategory);
-  const talentFilteredRows = activeCategory === "인재투자" && activeTalent !== allTalentFilter
+    : resolvedRows.filter((item) => item.category === activeCategory), [activeCategory, resolvedRows]);
+  const talentFilteredRows = useMemo(() => activeCategory === "인재투자" && activeTalent !== allTalentFilter
     ? categoryFilteredRows.filter((item) => item.talentType === activeTalent)
-    : categoryFilteredRows;
-  const detailFilteredRows = activeCategory === "운영비" && activeOperating !== allOperatingFilter
+    : categoryFilteredRows, [activeCategory, activeTalent, categoryFilteredRows]);
+  const detailFilteredRows = useMemo(() => activeCategory === "운영비" && activeOperating !== allOperatingFilter
     ? categoryFilteredRows.filter((item) => item.operatingType === activeOperating)
-    : talentFilteredRows;
+    : talentFilteredRows, [activeCategory, activeOperating, categoryFilteredRows, talentFilteredRows]);
   const canFilterByCardUser = activeCategory === "인재투자";
-  const cardUserSummaries = canFilterByCardUser ? buildCardUserSummaries(detailFilteredRows) : [];
-  const activeCardUser = canFilterByCardUser ? resolveActiveCardUser(activeCardUserValue, cardUserSummaries) : allCardUserFilter;
+  const cardUserSummaries = useMemo(() => canFilterByCardUser ? buildCardUserSummaries(detailFilteredRows) : [], [canFilterByCardUser, detailFilteredRows]);
+  const activeCardUser = canFilterByCardUser ? resolveActiveCardUser(selectedCardUser, cardUserSummaries) : allCardUserFilter;
   const isCardUserFiltered = canFilterByCardUser && activeCardUser !== allCardUserFilter;
-  const filteredRows = !canFilterByCardUser || activeCardUser === allCardUserFilter
+  const filteredRows = useMemo(() => !canFilterByCardUser || activeCardUser === allCardUserFilter
     ? detailFilteredRows
-    : detailFilteredRows.filter((item) => item.cardUser === activeCardUser);
-  const filteredTotal = sumResolvedAmount(filteredRows);
-  const categorySummaries = buildSummaries(categoryLabels, resolvedRows, (item) => item.category);
-  const talentSummaries = buildSummaries(talentLabels, resolvedRows.filter((item) => item.category === "인재투자"), (item) => item.talentType);
-  const operatingSummaries = buildSummaries(operatingLabels, resolvedRows.filter((item) => item.category === "운영비"), (item) => item.operatingType);
+    : detailFilteredRows.filter((item) => item.cardUser === activeCardUser), [activeCardUser, canFilterByCardUser, detailFilteredRows]);
+  const filteredTotal = useMemo(() => sumResolvedAmount(filteredRows), [filteredRows]);
+  const categorySummaries = useMemo(() => buildSummaries(categoryLabels, resolvedRows, (item) => item.category), [resolvedRows]);
+  const talentSummaries = useMemo(() => buildSummaries(talentLabels, resolvedRows.filter((item) => item.category === "인재투자"), (item) => item.talentType), [resolvedRows]);
+  const operatingSummaries = useMemo(() => buildSummaries(operatingLabels, resolvedRows.filter((item) => item.category === "운영비"), (item) => item.operatingType), [resolvedRows]);
+
+  function applyFilters({
+    category = activeCategory,
+    talent = activeTalent,
+    operating = activeOperating,
+    cardUser = activeCardUser,
+    scrollToDetail = true
+  }: {
+    category?: ExpenseCategory;
+    talent?: TalentFilter;
+    operating?: OperatingFilter;
+    cardUser?: string;
+    scrollToDetail?: boolean;
+  }) {
+    const nextTalent = category === "인재투자" ? talent : allTalentFilter;
+    const nextOperating = category === "운영비" ? operating : allOperatingFilter;
+    const nextCardUser = category === "인재투자" ? cardUser : allCardUserFilter;
+
+    setSelectedCategory(category);
+    setSelectedTalent(nextTalent);
+    setSelectedOperating(nextOperating);
+    setSelectedCardUser(nextCardUser);
+
+    if (typeof window !== "undefined") {
+      window.history.pushState(null, "", expenseHref({
+        category,
+        talent: nextTalent,
+        operating: nextOperating,
+        cardUser: nextCardUser
+      }));
+      if (scrollToDetail) {
+        window.requestAnimationFrame(() => {
+          document.getElementById("expense-detail")?.scrollIntoView({ block: "start", behavior: "smooth" });
+        });
+      }
+    }
+  }
+
+  function handleCardUserSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const nextCardUser = String(formData.get("cardUser") || allCardUserFilter);
+    applyFilters({ category: "인재투자", talent: activeTalent, cardUser: nextCardUser });
+  }
 
   return (
     <>
@@ -398,13 +450,14 @@ export function ExpenseAnalysisClient({
             const selected = activeCategory === summary.label;
 
             return (
-              <a
+              <button
                 className={[
                   "card kpi cursor-pointer p-4 text-left transition",
                   selected ? "border-blue-500 bg-blue-50 shadow-sm ring-1 ring-blue-100" : "hover:border-blue-200 hover:bg-slate-50"
                 ].join(" ")}
-                href={expenseHref({ category: summary.label as ExpenseCategory })}
                 key={summary.label}
+                onClick={() => applyFilters({ category: summary.label as ExpenseCategory })}
+                type="button"
                 aria-current={selected ? "true" : undefined}
               >
                 <div className="flex items-center justify-between gap-3">
@@ -419,7 +472,7 @@ export function ExpenseAnalysisClient({
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
                   <div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.min(100, summary.share)}%` }} />
                 </div>
-              </a>
+              </button>
             );
           })}
         </div>
@@ -452,9 +505,9 @@ export function ExpenseAnalysisClient({
               <div className="mt-2 font-black text-slate-950">{filteredRows.length.toLocaleString("ko-KR")}건</div>
             </div>
           </div>
-          <a className="btn w-full" href={expenseHref({})}>
+          <button className="btn w-full" onClick={() => applyFilters({ category: allCategoryFilter })} type="button">
             전체 지출 보기
-          </a>
+          </button>
         </aside>
       </section>
 
@@ -465,7 +518,7 @@ export function ExpenseAnalysisClient({
               <h2 className="section-title">인재투자 하위 유형</h2>
               <p className="mt-1 text-sm text-slate-500">기존 인투1~6은 인재투자 대카테고리의 하위 개념으로 조회합니다.</p>
             </div>
-            <a className="btn btn-sm" href={expenseHref({ category: "인재투자" })}>전체 인재투자</a>
+            <button className="btn btn-sm" onClick={() => applyFilters({ category: "인재투자", talent: allTalentFilter, cardUser: allCardUserFilter })} type="button">전체 인재투자</button>
           </div>
           <div className="grid grid-cols-6 gap-3 max-2xl:grid-cols-3 max-md:grid-cols-1">
             {talentSummaries.map((summary) => {
@@ -473,13 +526,14 @@ export function ExpenseAnalysisClient({
               const { code, name } = splitTalentLabel(summary.label);
 
               return (
-                <a
+                <button
                   className={[
                     "rounded-lg border p-4 text-left transition",
                     selected ? "border-blue-500 bg-blue-50 ring-1 ring-blue-100" : "border-slate-200 bg-white hover:border-blue-200"
                   ].join(" ")}
-                  href={expenseHref({ category: "인재투자", talent: summary.label as TalentFilter })}
                   key={summary.label}
+                  onClick={() => applyFilters({ category: "인재투자", talent: summary.label as TalentFilter, cardUser: allCardUserFilter })}
+                  type="button"
                   aria-current={selected ? "true" : undefined}
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -489,7 +543,7 @@ export function ExpenseAnalysisClient({
                   <div className="mt-2 text-sm font-black text-slate-950">{name}</div>
                   <div className="mt-2 text-base font-black text-slate-950">{formatKRW(summary.amount)}</div>
                   <div className="mt-1 text-xs text-slate-500">{summary.count.toLocaleString("ko-KR")}건</div>
-                </a>
+                </button>
               );
             })}
           </div>
@@ -503,20 +557,21 @@ export function ExpenseAnalysisClient({
               <h2 className="section-title">운영비 보조 구분</h2>
               <p className="mt-1 text-sm text-slate-500">운영비는 일반운영비와 이자로 나누어 조회합니다.</p>
             </div>
-            <a className="btn btn-sm" href={expenseHref({ category: "운영비" })}>전체 운영비</a>
+            <button className="btn btn-sm" onClick={() => applyFilters({ category: "운영비", operating: allOperatingFilter })} type="button">전체 운영비</button>
           </div>
           <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
             {operatingSummaries.map((summary) => {
               const selected = activeOperating === summary.label;
 
               return (
-                <a
+                <button
                   className={[
                     "rounded-lg border p-4 text-left transition",
                     selected ? "border-blue-500 bg-blue-50 ring-1 ring-blue-100" : "border-slate-200 bg-white hover:border-blue-200"
                   ].join(" ")}
-                  href={expenseHref({ category: "운영비", operating: summary.label as OperatingFilter })}
                   key={summary.label}
+                  onClick={() => applyFilters({ category: "운영비", operating: summary.label as OperatingFilter })}
+                  type="button"
                   aria-current={selected ? "true" : undefined}
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -525,7 +580,7 @@ export function ExpenseAnalysisClient({
                   </div>
                   <div className="mt-2 text-base font-black text-slate-950">{formatKRW(summary.amount)}</div>
                   <div className="mt-1 text-xs text-slate-500">{summary.count.toLocaleString("ko-KR")}건</div>
-                </a>
+                </button>
               );
             })}
           </div>
@@ -560,15 +615,16 @@ export function ExpenseAnalysisClient({
                 현재 선택된 지출유형 안에서 매입신용카드 원본의 카드사 컬럼 기준으로 지출 상세를 다시 필터링합니다.
               </p>
             </div>
-            <a
+            <button
               className={[
                 "btn btn-sm",
                 activeCardUser === allCardUserFilter ? "bg-blue-50 text-blue-700" : ""
               ].join(" ")}
-              href={expenseHref({ category: activeCategory, talent: activeTalent })}
+              onClick={() => applyFilters({ category: "인재투자", talent: activeTalent, cardUser: allCardUserFilter })}
+              type="button"
             >
               전체 카드사 {detailFilteredRows.length.toLocaleString("ko-KR")}건
-            </a>
+            </button>
           </div>
 
           <details className="mt-4 rounded-lg border border-slate-200 bg-white" open={isCardUserFiltered}>
@@ -578,7 +634,7 @@ export function ExpenseAnalysisClient({
                 {cardUserSummaries.length.toLocaleString("ko-KR")}개 카드사
               </span>
             </summary>
-            <form action="/expenses#expense-detail" className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 border-t border-slate-100 p-4 max-md:grid-cols-1" method="get">
+            <form className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 border-t border-slate-100 p-4 max-md:grid-cols-1" onSubmit={handleCardUserSubmit}>
               <input name="category" type="hidden" value="인재투자" />
               {activeTalent !== allTalentFilter ? <input name="talent" type="hidden" value={activeTalent} /> : null}
               <label className="grid gap-2 text-sm font-bold text-slate-700">
@@ -595,9 +651,9 @@ export function ExpenseAnalysisClient({
               <button className="btn btn-primary self-end" type="submit">
                 조회
               </button>
-              <a className="btn self-end" href={expenseHref({ category: activeCategory, talent: activeTalent })}>
+              <button className="btn self-end" onClick={() => applyFilters({ category: "인재투자", talent: activeTalent, cardUser: allCardUserFilter })} type="button">
                 해제
-              </a>
+              </button>
             </form>
           </details>
         </div> : null}
@@ -651,9 +707,13 @@ export function ExpenseAnalysisClient({
           <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
             <div className="font-black text-slate-950">표시할 지출 상세가 없습니다.</div>
             <p className="mt-2 text-sm text-slate-500">다른 지출유형{canFilterByCardUser ? "이나 카드사/사용자 필터" : ""}을 선택해 주세요.</p>
-            <a className="btn mt-4" href={expenseHref({ category: activeCategory, talent: activeTalent, operating: activeOperating })}>
+            <button
+              className="btn mt-4"
+              onClick={() => applyFilters({ category: activeCategory, talent: activeTalent, operating: activeOperating, cardUser: allCardUserFilter })}
+              type="button"
+            >
               {canFilterByCardUser ? "카드사 필터 해제" : "현재 유형 다시 보기"}
-            </a>
+            </button>
           </div>
         )}
       </section>
