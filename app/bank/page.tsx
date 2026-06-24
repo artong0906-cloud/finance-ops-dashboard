@@ -1,7 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { AppShell } from "@/components/layout/AppShell";
-import { formatKRW, sumBy } from "@/services/dashboard/calculations";
+import { chartColors, DonutPanel, inflowColor, outflowColor, RankBar, StackedBar, SummaryBox } from "@/components/shared/FinanceViz";
+import { formatCompactKRW, formatKRW, sumBy } from "@/services/dashboard/calculations";
 import { getDashboardData } from "@/services/dashboard/liveData";
 
 export default async function BankPage() {
@@ -13,24 +14,70 @@ export default async function BankPage() {
     const rows = bankRows.filter((row) => row.accountId === account.id);
     const cashIn = sumBy(rows.filter((row) => row.cashFlowType === "입금" && !row.isInternalTransfer), (row) => row.amount);
     const cashOut = sumBy(rows.filter((row) => row.cashFlowType === "출금" && !row.isInternalTransfer), (row) => row.amount);
-    return { account, rows, cashIn, cashOut, net: cashIn - cashOut };
+    return { account, rows, cashIn, cashOut, net: cashIn - cashOut, balance: account.currentBalance };
   });
+  const totalBalance = sumBy(accountRows, (row) => row.balance);
+  const cashInTotal = sumBy(accountRows, (row) => row.cashIn);
+  const cashOutTotal = sumBy(accountRows, (row) => row.cashOut);
+  const netCashFlow = cashInTotal - cashOutTotal;
+  const accountSegments = accountRows
+    .filter(({ balance }) => balance > 0)
+    .sort((a, b) => b.balance - a.balance)
+    .map(({ account, balance }, index) => ({
+      label: `${account.bankName} ${account.accountName}`,
+      amount: balance,
+      color: chartColors[index % chartColors.length],
+      caption: account.businessUnit
+    }));
+  const flowSegments = [
+    { label: "입금", amount: cashInTotal, color: inflowColor },
+    { label: "출금", amount: cashOutTotal, color: outflowColor }
+  ].filter((segment) => segment.amount > 0);
 
   return (
-    <AppShell title="통장 입출금" description="실제 업로드된 5월 은행 거래 기준으로 입금, 출금, 내부이체를 확인합니다." periodLabel={data.currentMonth || "2026-05"}>
-      <section className="mb-6 grid grid-cols-4 gap-4 max-xl:grid-cols-2 max-md:grid-cols-1">
-        {accountRows.map(({ account, rows, cashIn, cashOut, net }) => (
-          <div className="card" key={account.id}>
-            <div className="text-xs font-black text-slate-500">{account.businessUnit}</div>
-            <div className="mt-2 font-black">{account.accountName}</div>
-            <div className="metric-value mt-3">{formatKRW(net)}</div>
-            <div className="mt-2 text-xs leading-5 text-slate-500">
-              {account.bankName} {account.maskedNo}<br />
-              입금 {formatKRW(cashIn)} / 출금 {formatKRW(cashOut)} / {rows.length.toLocaleString("ko-KR")}건
-            </div>
-          </div>
-        ))}
+    <AppShell title="통장 입출금" description="실제 업로드된 5월 은행 거래 기준으로 입금, 출금, 내부이체를 확인합니다." periodLabel={data.currentMonth || "2026-05"} activePath="/bank">
+      <section className="mb-5 grid grid-cols-4 gap-3 max-xl:grid-cols-2 max-md:grid-cols-1">
+        <SummaryBox caption={`${accountSegments.length.toLocaleString("ko-KR")}개 계좌`} label="통장현금 잔고" tone="teal" value={formatKRW(totalBalance)} />
+        <SummaryBox caption={`${bankRows.filter((row) => row.cashFlowType === "입금").length.toLocaleString("ko-KR")}건`} label="월 입금" value={formatKRW(cashInTotal)} />
+        <SummaryBox caption={`${bankRows.filter((row) => row.cashFlowType === "출금").length.toLocaleString("ko-KR")}건`} label="월 출금" tone="stone" value={formatKRW(cashOutTotal)} />
+        <SummaryBox caption="입금 - 출금" label="순현금흐름" value={formatKRW(netCashFlow)} />
       </section>
+
+      <section className="mb-6 grid grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
+        <div className="card">
+          <div className="mb-4 flex items-start justify-between gap-4 max-md:flex-col">
+            <div>
+              <h2 className="section-title">계좌별 현금 잔고</h2>
+              <p className="mt-1 text-sm text-slate-500">현금성자산과 동일한 계좌 잔액 기준으로 보유 비중을 표시합니다.</p>
+            </div>
+            <span className="badge badge-muted">총 잔고 {formatCompactKRW(totalBalance)}</span>
+          </div>
+          <div className="grid gap-2.5">
+            {accountSegments.map((segment) => (
+              <RankBar
+                amount={segment.amount}
+                color={segment.color}
+                count={accountRows.find(({ account }) => `${account.bankName} ${account.accountName}` === segment.label)?.rows.length}
+                key={segment.label}
+                label={segment.label}
+                total={totalBalance}
+              />
+            ))}
+          </div>
+        </div>
+
+        <aside className="grid min-w-0 gap-4 overflow-hidden">
+          <DonutPanel segments={accountSegments} title="계좌 잔고 비중" totalLabel="총 잔고" totalValue={formatCompactKRW(totalBalance)} />
+          <div className="card">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="text-sm font-black text-slate-950">입출금 흐름</h3>
+              <span className="badge badge-muted">{bankRows.length.toLocaleString("ko-KR")}건</span>
+            </div>
+            <StackedBar segments={flowSegments} />
+          </div>
+        </aside>
+      </section>
+
       <section className="card">
         <h2 className="section-title mb-4">은행 거래 상세</h2>
         <div className="table-wrap">

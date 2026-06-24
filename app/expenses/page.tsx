@@ -23,7 +23,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   const expenseRows = data.transactions.filter((row) => row.cashFlowType === "출금" && !row.isInternalTransfer);
 
   return (
-    <AppShell title="지출 분석" description="업로드된 5월 거래 기준으로 인재투자, 환불, 급여, 광고비, 세금, 운영비, 기타 지출을 분석합니다." periodLabel={data.currentMonth || "2026-05"}>
+    <AppShell title="지출 분석" description="업로드된 5월 거래 기준으로 인재투자, 환불, 급여, 광고비, 세금, 운영비, 기타 지출을 분석합니다." periodLabel={data.currentMonth || "2026-05"} activePath="/expenses">
       <ExpenseAnalysisClient activeCardUser={activeCardUser} activeCategory={activeCategory} activeOperating={activeOperating} activeTalent={activeTalent} expenseRows={expenseRows} />
     </AppShell>
   );

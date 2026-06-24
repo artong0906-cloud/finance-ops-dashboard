@@ -1,7 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { AppShell } from "@/components/layout/AppShell";
-import { formatKRW } from "@/services/dashboard/calculations";
+import { chartColors, DonutPanel, RankBar, SummaryBox } from "@/components/shared/FinanceViz";
+import { formatCompactKRW, formatKRW } from "@/services/dashboard/calculations";
 import { getDashboardData } from "@/services/dashboard/liveData";
 import type { Transaction } from "@/types/finance";
 
@@ -163,6 +164,13 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
       share: percent(amount, totalRevenue)
     };
   });
+  const revenueSegments = summaries
+    .filter((summary) => summary.amount > 0)
+    .map((summary, index) => ({
+      label: summary.category,
+      amount: summary.amount,
+      color: chartColors[index % chartColors.length]
+    }));
 
   return (
     <AppShell
@@ -171,67 +179,123 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
       periodLabel={data.currentMonth || "2026-05"}
       activePath="/revenue"
     >
-      <section className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
-        5월은 모든 입금이 한 통장으로 들어왔기 때문에 기본적으로 광고사업부 매출로 산정합니다.
-        고용노동부, 고용부, 지원금, 훈련비, 식대는 정부지원금으로 분리합니다.
-        환급, 매출취소, 대여금상환, 급여착오지급반환, 캐시백, 조수인 입금, 영업외수익은 기타매출로 분리합니다.
-        대출실행 입금은 매출 후보에서 제외합니다.
+      <section className="card mb-5">
+        <div className="flex items-start justify-between gap-4 max-lg:flex-col">
+          <div>
+            <h2 className="section-title">매출 분류 기준</h2>
+            <p className="mt-2 max-w-5xl text-sm leading-6 text-slate-600">
+              5월은 모든 입금이 한 통장으로 들어왔기 때문에 기본값은 광고사업부 매출입니다.
+              정부지원금과 기타매출 키워드는 별도 분리하고, 대출실행 입금은 매출 후보에서 제외합니다.
+            </p>
+          </div>
+          <span className="badge badge-muted">5월 시뮬레이션</span>
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-3 max-md:grid-cols-1">
+          <SummaryBox
+            caption={`${revenueRows.length.toLocaleString("ko-KR")}건`}
+            label="매출 후보"
+            tone="teal"
+            value={formatKRW(totalRevenue)}
+          />
+          <SummaryBox
+            caption={`${filteredRows.length.toLocaleString("ko-KR")}건 표시`}
+            label="현재 선택 금액"
+            value={formatKRW(filteredTotal)}
+          />
+          <SummaryBox
+            caption="대출실행 입금은 제외"
+            label="주요 분리 기준"
+            tone="stone"
+            value={activeFilter === allFilter ? "전체 보기" : activeFilter}
+          />
+        </div>
       </section>
 
-      <section className="mb-6 grid grid-cols-[minmax(0,1fr)_280px] gap-4 max-xl:grid-cols-1">
-        <div className="grid grid-cols-5 gap-4 max-2xl:grid-cols-3 max-xl:grid-cols-2 max-md:grid-cols-1">
-          {summaries.map((summary) => {
+      <section className="mb-6 grid grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
+        <div className="card">
+          <div className="mb-4 flex items-start justify-between gap-4 max-md:flex-col">
+            <div>
+              <h2 className="section-title">매출 카테고리</h2>
+              <p className="mt-1 text-sm text-slate-500">카드를 클릭하면 하단 상세가 해당 매출구분으로 필터링됩니다.</p>
+            </div>
+            <a className="btn btn-sm" href={filterHref(allFilter)}>전체 보기</a>
+          </div>
+          <div className="grid grid-cols-5 gap-3 max-2xl:grid-cols-3 max-xl:grid-cols-2 max-md:grid-cols-1">
+            {summaries.map((summary, index) => {
             const selected = activeFilter === summary.category;
+            const color = chartColors[index % chartColors.length];
 
             return (
               <a
                 aria-current={selected ? "true" : undefined}
                 className={[
-                  "card kpi cursor-pointer p-5 transition",
-                  selected ? "border-blue-500 bg-blue-50 shadow-sm ring-1 ring-blue-100" : "hover:border-blue-200 hover:bg-slate-50"
+                  "rounded-lg border bg-white p-4 text-left transition",
+                  selected ? "shadow-sm ring-1 ring-slate-200" : "hover:border-slate-300 hover:bg-slate-50"
                 ].join(" ")}
                 href={filterHref(summary.category)}
                 key={summary.category}
+                style={{ borderColor: selected ? color : undefined }}
               >
                 <div className="flex items-center justify-between gap-3">
                   <span className={selected ? "badge" : "badge badge-muted"}>{summary.category}</span>
                   <span className="text-xs font-black text-slate-400">{summary.share}</span>
                 </div>
-                <div className="metric-value mt-4">{formatKRW(summary.amount)}</div>
+                <div className="mt-4 text-xl font-black text-slate-950">{formatKRW(summary.amount)}</div>
                 <div className="mt-2 text-xs leading-5 text-slate-500">
                   {summary.rows.length.toLocaleString("ko-KR")}건 · {ruleCaption(summary.category)}
                 </div>
                 <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
-                  <div className="h-full rounded-full bg-blue-600" style={{ width: summary.share }} />
+                  <div className="h-full rounded-full" style={{ width: summary.share, backgroundColor: color }} />
                 </div>
               </a>
             );
-          })}
+            })}
+          </div>
+          <div className="mt-5 grid gap-2">
+            {summaries.filter((summary) => summary.amount > 0).map((summary, index) => (
+              <RankBar
+                amount={summary.amount}
+                color={chartColors[index % chartColors.length]}
+                count={summary.rows.length}
+                key={summary.category}
+                label={summary.category}
+                total={totalRevenue}
+              />
+            ))}
+          </div>
         </div>
 
-        <aside className="card flex flex-col justify-between gap-4">
-          <div>
-            <div className="eyebrow">현재 매출 필터</div>
-            <div className="mt-2 text-2xl font-black text-slate-950">{activeFilter}</div>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
-              {activeFilter === allFilter
-                ? "전체 통장 입금 매출 후보를 표시 중입니다."
-                : `${activeFilter}로 분류된 입금만 하단 상세에 표시합니다.`}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <div className="text-xs font-black text-slate-500">표시 금액</div>
-              <div className="mt-2 font-black text-slate-950">{formatKRW(filteredTotal)}</div>
+        <aside className="grid min-w-0 gap-4 overflow-hidden">
+          <DonutPanel
+            segments={revenueSegments}
+            title="매출 비중"
+            totalLabel="총 매출"
+            totalValue={formatCompactKRW(totalRevenue)}
+          />
+          <div className="card flex flex-col justify-between gap-4">
+            <div>
+              <div className="eyebrow">현재 매출 필터</div>
+              <div className="mt-2 text-2xl font-black text-slate-950">{activeFilter}</div>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                {activeFilter === allFilter
+                  ? "전체 통장 입금 매출 후보를 표시 중입니다."
+                  : `${activeFilter}로 분류된 입금만 하단 상세에 표시합니다.`}
+              </p>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <div className="text-xs font-black text-slate-500">표시 건수</div>
-              <div className="mt-2 font-black text-slate-950">{filteredRows.length.toLocaleString("ko-KR")}건</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="text-xs font-black text-slate-500">표시 금액</div>
+                <div className="mt-2 font-black text-slate-950">{formatKRW(filteredTotal)}</div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="text-xs font-black text-slate-500">표시 건수</div>
+                <div className="mt-2 font-black text-slate-950">{filteredRows.length.toLocaleString("ko-KR")}건</div>
+              </div>
             </div>
+            <a className="btn w-full" href={filterHref(allFilter)}>
+              전체 매출 보기
+            </a>
           </div>
-          <a className="btn w-full" href={filterHref(allFilter)}>
-            전체 매출 보기
-          </a>
         </aside>
       </section>
 

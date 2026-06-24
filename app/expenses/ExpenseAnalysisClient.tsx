@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
+import { chartColors, DonutPanel, SummaryBox } from "@/components/shared/FinanceViz";
 import { formatKRW } from "@/services/dashboard/calculations";
 import type { Transaction } from "@/types/finance";
 
@@ -393,6 +394,14 @@ export function ExpenseAnalysisClient({
   const categorySummaries = useMemo(() => buildSummaries(categoryLabels, resolvedRows, (item) => item.category), [resolvedRows]);
   const talentSummaries = useMemo(() => buildSummaries(talentLabels, resolvedRows.filter((item) => item.category === "인재투자"), (item) => item.talentType), [resolvedRows]);
   const operatingSummaries = useMemo(() => buildSummaries(operatingLabels, resolvedRows.filter((item) => item.category === "운영비"), (item) => item.operatingType), [resolvedRows]);
+  const totalExpense = useMemo(() => sumResolvedAmount(resolvedRows), [resolvedRows]);
+  const expenseSegments = useMemo(() => categorySummaries
+    .filter((summary) => summary.amount > 0)
+    .map((summary, index) => ({
+      label: summary.label,
+      amount: summary.amount,
+      color: chartColors[index % chartColors.length]
+    })), [categorySummaries]);
 
   function applyFilters({
     category = activeCategory,
@@ -440,25 +449,55 @@ export function ExpenseAnalysisClient({
 
   return (
     <>
-      <section className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
-        지출을 인재투자, 환불, 급여, 광고비, 세금, 운영비, 기타 대카테고리로 먼저 나누고, 인재투자 안에서만 인투1~6 하위 유형을 다시 조회합니다.
+      <section className="card mb-5">
+        <div className="flex items-start justify-between gap-4 max-lg:flex-col">
+          <div>
+            <h2 className="section-title">지출 분류 기준</h2>
+            <p className="mt-2 max-w-5xl text-sm leading-6 text-slate-600">
+              지출을 인재투자, 환불, 급여, 광고비, 세금, 운영비, 기타 대카테고리로 먼저 나누고,
+              인재투자 안에서만 인투1~6과 카드사/사용자 기준을 다시 조회합니다.
+            </p>
+          </div>
+          <span className="badge badge-muted">5월 실데이터</span>
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-3 max-md:grid-cols-1">
+          <SummaryBox
+            caption={`${resolvedRows.length.toLocaleString("ko-KR")}건`}
+            label="전체 지출"
+            tone="stone"
+            value={formatKRW(totalExpense)}
+          />
+          <SummaryBox
+            caption={`${filteredRows.length.toLocaleString("ko-KR")}건 표시`}
+            label="현재 선택 금액"
+            value={formatKRW(filteredTotal)}
+          />
+          <SummaryBox
+            caption={activeCategory === "인재투자" ? activeTalent : activeCategory === "운영비" ? activeOperating : "대카테고리"}
+            label="현재 기준"
+            tone="teal"
+            value={activeCategory}
+          />
+        </div>
       </section>
 
-      <section className="mb-6 grid grid-cols-[minmax(0,1fr)_270px] gap-4 max-xl:grid-cols-1">
+      <section className="mb-6 grid grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
         <div className="grid grid-cols-7 gap-3 max-2xl:grid-cols-4 max-lg:grid-cols-2 max-md:grid-cols-1">
-          {categorySummaries.map((summary) => {
+          {categorySummaries.map((summary, index) => {
             const selected = activeCategory === summary.label;
+            const color = chartColors[index % chartColors.length];
 
             return (
               <button
                 className={[
-                  "card kpi cursor-pointer p-4 text-left transition",
-                  selected ? "border-blue-500 bg-blue-50 shadow-sm ring-1 ring-blue-100" : "hover:border-blue-200 hover:bg-slate-50"
+                  "rounded-lg border bg-white p-4 text-left transition",
+                  selected ? "shadow-sm ring-1 ring-slate-200" : "hover:border-slate-300 hover:bg-slate-50"
                 ].join(" ")}
                 key={summary.label}
                 onClick={() => applyFilters({ category: summary.label as ExpenseCategory })}
                 type="button"
                 aria-current={selected ? "true" : undefined}
+                style={{ borderColor: selected ? color : undefined }}
               >
                 <div className="flex items-center justify-between gap-3">
                   <span className={selected ? "badge" : "badge badge-muted"}>{summary.label}</span>
@@ -470,44 +509,52 @@ export function ExpenseAnalysisClient({
                   <span>{selected ? "선택됨" : "조회"}</span>
                 </div>
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
-                  <div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.min(100, summary.share)}%` }} />
+                  <div className="h-full rounded-full" style={{ width: `${Math.min(100, summary.share)}%`, backgroundColor: color }} />
                 </div>
               </button>
             );
           })}
         </div>
 
-        <aside className="card flex flex-col justify-between gap-4">
-          <div>
-            <div className="eyebrow">현재 상세 필터</div>
-            <div className="mt-2 text-2xl font-black text-slate-950">{activeCategory}</div>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
-              {activeCategory === "인재투자"
-                ? `하위유형: ${activeTalent}`
-                : activeCategory === "운영비"
-                  ? `보조유형: ${activeOperating}`
-                  : "대카테고리 기준으로 표시 중입니다."}
-              {canFilterByCardUser ? (
-                <>
-                  <br />
-                  카드사/사용자: {activeCardUser}
-                </>
-              ) : null}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <div className="text-xs font-black text-slate-500">표시 금액</div>
-              <div className="mt-2 font-black text-slate-950">{formatKRW(filteredTotal)}</div>
+        <aside className="grid min-w-0 gap-4 overflow-hidden">
+          <DonutPanel
+            segments={expenseSegments}
+            title="지출 비중"
+            totalLabel="총 지출"
+            totalValue={formatKRW(totalExpense)}
+          />
+          <div className="card flex flex-col justify-between gap-4">
+            <div>
+              <div className="eyebrow">현재 상세 필터</div>
+              <div className="mt-2 text-2xl font-black text-slate-950">{activeCategory}</div>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                {activeCategory === "인재투자"
+                  ? `하위유형: ${activeTalent}`
+                  : activeCategory === "운영비"
+                    ? `보조유형: ${activeOperating}`
+                    : "대카테고리 기준으로 표시 중입니다."}
+                {canFilterByCardUser ? (
+                  <>
+                    <br />
+                    카드사/사용자: {activeCardUser}
+                  </>
+                ) : null}
+              </p>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <div className="text-xs font-black text-slate-500">표시 건수</div>
-              <div className="mt-2 font-black text-slate-950">{filteredRows.length.toLocaleString("ko-KR")}건</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="text-xs font-black text-slate-500">표시 금액</div>
+                <div className="mt-2 font-black text-slate-950">{formatKRW(filteredTotal)}</div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="text-xs font-black text-slate-500">표시 건수</div>
+                <div className="mt-2 font-black text-slate-950">{filteredRows.length.toLocaleString("ko-KR")}건</div>
+              </div>
             </div>
+            <button className="btn w-full" onClick={() => applyFilters({ category: allCategoryFilter })} type="button">
+              전체 지출 보기
+            </button>
           </div>
-          <button className="btn w-full" onClick={() => applyFilters({ category: allCategoryFilter })} type="button">
-            전체 지출 보기
-          </button>
         </aside>
       </section>
 

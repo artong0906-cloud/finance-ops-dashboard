@@ -1,7 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { AppShell } from "@/components/layout/AppShell";
-import { formatKRW, sumBy } from "@/services/dashboard/calculations";
+import { chartColors, DonutPanel, RankBar, SummaryBox } from "@/components/shared/FinanceViz";
+import { formatCompactKRW, formatKRW, sumBy } from "@/services/dashboard/calculations";
 import { getDashboardData } from "@/services/dashboard/liveData";
 
 export default async function CardsPage() {
@@ -12,40 +13,95 @@ export default async function CardsPage() {
   const grouped = Array.from(
     cardRows.reduce((acc, row) => {
       const key = row.mainCategory || "미분류";
-      acc.set(key, (acc.get(key) || 0) + row.amount);
+      const current = acc.get(key) || { label: key, amount: 0, count: 0 };
+      current.amount += row.amount;
+      current.count += 1;
+      acc.set(key, current);
       return acc;
-    }, new Map<string, number>())
-  ).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    }, new Map<string, { label: string; amount: number; count: number }>())
+  ).map(([, value]) => value).sort((a, b) => b.amount - a.amount).slice(0, 6);
+  const userGrouped = Array.from(
+    cardRows.reduce((acc, row) => {
+      const key = row.cardIssuer || row.cardBudgetGroup || "카드사 미지정";
+      const current = acc.get(key) || { label: key, amount: 0, count: 0 };
+      current.amount += row.amount;
+      current.count += 1;
+      acc.set(key, current);
+      return acc;
+    }, new Map<string, { label: string; amount: number; count: number }>())
+  ).map(([, value]) => value).sort((a, b) => b.amount - a.amount).slice(0, 6);
+  const categorySegments = grouped.map((item, index) => ({
+    label: item.label,
+    amount: item.amount,
+    color: chartColors[index % chartColors.length]
+  }));
+  const reviewCount = cardRows.filter((row) => row.reviewStatus === "확인필요").length;
 
   return (
-    <AppShell title="카드 사용내역" description="업로드된 5월 카드 로우데이터를 기준으로 사용액과 분류 결과를 확인합니다." periodLabel={data.currentMonth || "2026-05"}>
-      <section className="mb-6 grid grid-cols-4 gap-4 max-xl:grid-cols-2 max-md:grid-cols-1">
-        <div className="card">
-          <div className="eyebrow">카드 거래</div>
-          <div className="metric-value mt-3">{cardRows.length.toLocaleString("ko-KR")}건</div>
-        </div>
-        <div className="card">
-          <div className="eyebrow">카드 사용액</div>
-          <div className="metric-value mt-3">{formatKRW(total)}</div>
-        </div>
-        <div className="card">
-          <div className="eyebrow">확인필요</div>
-          <div className="metric-value mt-3">{cardRows.filter((row) => row.reviewStatus === "확인필요").length.toLocaleString("ko-KR")}건</div>
-        </div>
-        <div className="card">
-          <div className="eyebrow">5월 집계 기준</div>
-          <div className="metric-value mt-3">광고사업부</div>
-        </div>
+    <AppShell title="카드 사용내역" description="업로드된 5월 카드 로우데이터를 기준으로 사용액과 분류 결과를 확인합니다." periodLabel={data.currentMonth || "2026-05"} activePath="/cards">
+      <section className="mb-5 grid grid-cols-4 gap-3 max-xl:grid-cols-2 max-md:grid-cols-1">
+        <SummaryBox caption="매입신용카드 원본 기준" label="카드 거래" value={`${cardRows.length.toLocaleString("ko-KR")}건`} />
+        <SummaryBox caption="카드 사용 총액" label="카드 사용액" tone="stone" value={formatKRW(total)} />
+        <SummaryBox caption="업로드 검증에서 확인" label="확인필요" value={`${reviewCount.toLocaleString("ko-KR")}건`} />
+        <SummaryBox caption="5월 임시 귀속" label="집계 기준" tone="teal" value="광고사업부" />
       </section>
-      <section className="card mb-6">
-        <h2 className="section-title mb-4">주요 분류별 사용액</h2>
-        <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
-          {grouped.map(([category, amount]) => (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4" key={category}>
-              <div className="text-xs font-black text-slate-500">{category}</div>
-              <div className="mt-2 text-lg font-black">{formatKRW(amount)}</div>
+
+      <section className="mb-6 grid grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
+        <div className="card">
+          <div className="mb-4 flex items-start justify-between gap-4 max-md:flex-col">
+            <div>
+              <h2 className="section-title">주요 분류별 사용액</h2>
+              <p className="mt-1 text-sm text-slate-500">카드 거래의 대분류별 사용 규모와 건수를 표시합니다.</p>
             </div>
-          ))}
+            <span className="badge badge-muted">총 {formatCompactKRW(total)}</span>
+          </div>
+          <div className="grid gap-2.5">
+            {grouped.map((item, index) => (
+              <RankBar
+                amount={item.amount}
+                color={chartColors[index % chartColors.length]}
+                count={item.count}
+                key={item.label}
+                label={item.label}
+                total={total}
+              />
+            ))}
+          </div>
+        </div>
+
+        <aside className="grid min-w-0 gap-4 overflow-hidden">
+          <DonutPanel segments={categorySegments} title="카드 사용 비중" totalLabel="총 사용" totalValue={formatCompactKRW(total)} />
+          <div className="card min-w-0 overflow-hidden">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="text-sm font-black text-slate-950">카드사/사용자 상위</h3>
+              <span className="badge badge-muted">{userGrouped.length.toLocaleString("ko-KR")}개</span>
+            </div>
+            <div className="grid gap-2">
+              {userGrouped.map((item, index) => (
+                <RankBar
+                  amount={item.amount}
+                  color={chartColors[index % chartColors.length]}
+                  count={item.count}
+                  key={item.label}
+                  label={item.label}
+                  total={total}
+                />
+              ))}
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <section className="card mb-6">
+        <div className="flex items-start justify-between gap-4 max-md:flex-col">
+          <div>
+            <h2 className="section-title">운영 기준</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              2026년 5월은 세부 사업부 기준 확정 전까지 카드 사용분을 광고사업부 기준으로 산정합니다.
+              6월 결산 기준을 받으면 사업부별 귀속 규칙을 다시 반영합니다.
+            </p>
+          </div>
+          <span className="badge badge-muted">5월 임시 기준</span>
         </div>
       </section>
       <section className="card mb-6">
@@ -80,13 +136,6 @@ export default async function CardsPage() {
             </tbody>
           </table>
         </div>
-      </section>
-      <section className="card">
-        <h2 className="section-title mb-3">운영 기준</h2>
-        <p className="text-sm leading-7 text-slate-600">
-          2026년 5월은 세부 사업부 기준 확정 전까지 입금과 출금을 광고사업부 기준으로 산정합니다.
-          6월 결산 기준을 받으면 사업부별 귀속 규칙을 다시 반영합니다.
-        </p>
       </section>
     </AppShell>
   );

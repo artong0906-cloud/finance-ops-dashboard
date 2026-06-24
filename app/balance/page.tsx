@@ -2,7 +2,8 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
-import { endingAmount, formatKRW, sumBy } from "@/services/dashboard/calculations";
+import { chartColors, DonutPanel, equityColor, FinancialCard, outflowColor, StackedBar } from "@/components/shared/FinanceViz";
+import { endingAmount, formatCompactKRW, formatKRW, sumBy } from "@/services/dashboard/calculations";
 import { getDashboardData } from "@/services/dashboard/liveData";
 import type { BalanceMovement, BankAccount } from "@/types/finance";
 
@@ -101,6 +102,10 @@ function displayAmount(value: number | null) {
   return value === null ? "-" : formatKRW(value);
 }
 
+function balanceDelta(row: BalanceMovement) {
+  return row.increaseAmount - row.decreaseAmount;
+}
+
 function bankAccountDetails(bankAccounts: BankAccount[]): BalanceDetailRow[] {
   return bankAccounts
     .filter((account) => Math.abs(account.currentBalance) > 0)
@@ -139,6 +144,16 @@ function detailRowsForGroup(group: string, rows: BalanceViewRow[], bankAccounts:
   }
 
   return rows.map(movementDetail);
+}
+
+function balanceGroupSegments(rows: BalanceViewRow[], order: string[], bankAccounts: BankAccount[] = []) {
+  return groupRows(rows, order)
+    .map(([group, groupRows], index) => ({
+      label: group,
+      amount: sumBy(detailRowsForGroup(group, groupRows, bankAccounts), (row) => row.ending),
+      color: chartColors[index % chartColors.length]
+    }))
+    .filter((segment) => segment.amount > 0);
 }
 
 function BalanceGroupSection({
@@ -295,13 +310,40 @@ export default async function BalancePage() {
   const totalAssets = sumBy(assets.filter((row) => row.group !== "현금성자산"), (row) => row.ending) + sumBy(cashDetails, (row) => row.ending);
   const totalLiabilities = sumBy(liabilities, (row) => row.ending);
   const equity = totalAssets - totalLiabilities;
+  const assetChange = sumBy(assets, balanceDelta);
+  const liabilityChange = sumBy(liabilities, balanceDelta);
+  const equityChange = assetChange - liabilityChange;
+  const assetSegments = balanceGroupSegments(assets, assetGroupOrder, bankAccounts);
+  const liabilitySegments = balanceGroupSegments(liabilities, liabilityGroupOrder);
+  const capitalSegments = [
+    { label: "부채", amount: totalLiabilities, color: outflowColor },
+    { label: "자본", amount: equity, color: equityColor }
+  ].filter((segment) => segment.amount > 0);
 
   return (
-    <AppShell title="자산/부채 현황" description="월별 업로드 증감표를 기준으로 자산·부채 항목별 상세를 확인합니다." periodLabel={data.currentMonth || "2026-05"}>
-      <section className="mb-6 grid grid-cols-3 gap-4 max-md:grid-cols-1">
-        <div className="card"><div className="eyebrow">총자산</div><div className="metric-value mt-3">{formatKRW(totalAssets)}</div></div>
-        <div className="card"><div className="eyebrow">총부채</div><div className="metric-value mt-3">{formatKRW(totalLiabilities)}</div></div>
-        <div className="card"><div className="eyebrow">자본</div><div className="metric-value mt-3">{formatKRW(equity)}</div><div className="mt-2 text-xs text-slate-500">총자산 - 총부채</div></div>
+    <AppShell title="자산/부채 현황" description="월별 업로드 증감표를 기준으로 자산·부채 항목별 상세를 확인합니다." periodLabel={data.currentMonth || "2026-05"} activePath="/balance">
+      <section className="card mb-6">
+        <div className="mb-4 flex items-start justify-between gap-4 max-md:flex-col">
+          <div>
+            <h2 className="section-title">자산 · 부채 · 자본</h2>
+            <p className="mt-1 text-sm text-slate-500">기말 잔액, 전월비 증감액, 구성 비중을 한 섹션에서 확인합니다.</p>
+          </div>
+          <span className="badge badge-muted">총자산 {formatCompactKRW(totalAssets)}</span>
+        </div>
+        <div className="grid grid-cols-3 gap-3 max-lg:grid-cols-1">
+          <FinancialCard change={assetChange} color={equityColor} label="총자산" value={totalAssets} />
+          <FinancialCard change={liabilityChange} color={outflowColor} label="총부채" value={totalLiabilities} />
+          <FinancialCard change={equityChange} color="#52beb7" label="자본" value={equity} />
+        </div>
+        <div className="mt-4">
+          <StackedBar segments={capitalSegments} />
+        </div>
+      </section>
+
+      <section className="mb-6 grid grid-cols-3 gap-4 max-xl:grid-cols-1">
+        <DonutPanel segments={capitalSegments} title="자산 대비 부채/자본" totalLabel="총자산" totalValue={formatCompactKRW(totalAssets)} />
+        <DonutPanel segments={assetSegments} title="자산 구성" totalLabel="총자산" totalValue={formatCompactKRW(totalAssets)} />
+        <DonutPanel segments={liabilitySegments} title="부채 구성" totalLabel="총부채" totalValue={formatCompactKRW(totalLiabilities)} />
       </section>
 
       <section className="mb-6 grid grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
