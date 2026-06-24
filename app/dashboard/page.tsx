@@ -414,8 +414,8 @@ export default async function DashboardPage() {
           <KpiCard caption={`자산 대비 자본 ${percent(equity, totalAssets)}`} icon={<WalletCards size={19} />} label="자본" tone="slate" value={formatCompactKRW(equity)} />
         </section>
 
-        <section className="grid grid-cols-[minmax(0,1.15fr)_minmax(360px,.85fr)] items-start gap-4 max-xl:grid-cols-1">
-          <div className="card">
+        <section className="grid grid-cols-[minmax(0,1.15fr)_minmax(360px,.85fr)] items-stretch gap-4 max-xl:grid-cols-1">
+          <div className="card h-full">
             <div className="mb-3 flex items-start justify-between gap-4 max-md:flex-col">
               <div>
                 <h2 className="section-title">통장현금 잔고</h2>
@@ -436,7 +436,7 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          <div className="card">
+          <div className="card h-full">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
                 <h2 className="section-title">대출현황</h2>
@@ -454,7 +454,7 @@ export default async function DashboardPage() {
           </div>
         </section>
 
-        <section className="grid grid-cols-[minmax(0,1fr)_320px] items-start gap-4 max-xl:grid-cols-1">
+        <section>
           <div className="card">
             <div className="mb-3 flex items-start justify-between gap-3 max-md:flex-col">
               <div>
@@ -486,11 +486,9 @@ export default async function DashboardPage() {
               <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: outflowColor }} />출금</span>
             </div>
           </div>
-
-          <DonutPanel segments={capitalSegments} title="자산 대비 부채/자본" totalLabel="총자산" totalValue={formatCompactKRW(totalAssets)} />
         </section>
 
-        <section className="grid grid-cols-[minmax(0,1fr)_minmax(360px,.92fr)] items-start gap-4 max-xl:grid-cols-1">
+        <section className="grid grid-cols-[minmax(0,1fr)_360px] items-start gap-4 max-xl:grid-cols-1">
           <div className="card">
             <div className="mb-3 flex items-center justify-between gap-3 max-md:flex-col max-md:items-start">
               <div>
@@ -513,6 +511,7 @@ export default async function DashboardPage() {
           </div>
 
           <div className="grid h-fit gap-4">
+            <DonutPanel segments={capitalSegments} title="자산 대비 부채/자본" totalLabel="총자산" totalValue={formatCompactKRW(totalAssets)} />
             <DonutPanel segments={assetSegments} title="자산 구성" totalLabel="총자산" totalValue={formatCompactKRW(totalAssets)} />
             <DonutPanel segments={liabilitySegments} title="부채 구성" totalLabel="총부채" totalValue={formatCompactKRW(totalLiabilities)} />
           </div>
