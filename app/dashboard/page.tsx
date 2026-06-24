@@ -289,22 +289,84 @@ function FinancialCard({
   change: number;
   color: string;
 }) {
-  const isPositive = change >= 0;
-  const Icon = isPositive ? TrendingUp : TrendingDown;
+  const isPositive = change > 0;
+  const isNegative = change < 0;
+  const Icon = isNegative ? TrendingDown : TrendingUp;
+  const changeLabel = isPositive ? "증가" : isNegative ? "감소" : "변동 없음";
+  const changeStyle = isPositive
+    ? "border-teal-200 bg-teal-50 text-teal-800"
+    : isNegative
+      ? "border-orange-200 bg-orange-50 text-orange-900"
+      : "border-slate-200 bg-slate-50 text-slate-700";
+
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
-          <span className="text-xs font-black text-slate-500">{label}</span>
-        </div>
-        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-black ${isPositive ? "bg-teal-50 text-teal-800" : "bg-amber-50 text-amber-800"}`}>
-          <Icon size={12} />
-          {signedKRW(change)}
-        </span>
+      <div className="flex items-center gap-2">
+        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
+        <span className="text-xs font-black text-slate-500">{label}</span>
       </div>
       <div className="mt-3 text-2xl font-black tracking-tight text-slate-950">{formatKRW(value)}</div>
-      <div className="mt-1 text-xs text-slate-500">전월비 증감액 포함</div>
+      <div className={`mt-3 rounded-lg border px-3 py-2.5 ${changeStyle}`}>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[11px] font-black opacity-75">전월비 증감액</span>
+          <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-black">{changeLabel}</span>
+        </div>
+        <div className="mt-1.5 flex items-center gap-1 text-lg font-black">
+          <Icon size={15} />
+          {signedKRW(change)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryBox({
+  label,
+  value,
+  tone = "slate"
+}: {
+  label: string;
+  value: string;
+  tone?: "teal" | "stone" | "slate";
+}) {
+  const toneClass = {
+    teal: "border-teal-100 bg-teal-50/70",
+    stone: "border-stone-200 bg-stone-50",
+    slate: "border-slate-200 bg-slate-50"
+  }[tone];
+
+  return (
+    <div className={`rounded-lg border p-3 ${toneClass}`}>
+      <div className="eyebrow">{label}</div>
+      <div className="mt-2 text-2xl font-black text-slate-950">{value}</div>
+    </div>
+  );
+}
+
+function CashFlowBox({
+  label,
+  value,
+  caption,
+  tone = "slate",
+  valueClassName = "text-slate-950"
+}: {
+  label: string;
+  value: string;
+  caption: string;
+  tone?: "teal" | "stone" | "slate";
+  valueClassName?: string;
+}) {
+  const toneClass = {
+    teal: "border-teal-100 bg-teal-50/70",
+    stone: "border-stone-200 bg-stone-50",
+    slate: "border-slate-200 bg-slate-50"
+  }[tone];
+
+  return (
+    <div className={`rounded-lg border p-3 ${toneClass}`}>
+      <div className="eyebrow">{label}</div>
+      <div className={`mt-2 text-xl font-black ${valueClassName}`}>{value}</div>
+      <div className="mt-1 text-xs text-slate-500">{caption}</div>
     </div>
   );
 }
@@ -383,23 +445,16 @@ export default async function DashboardPage() {
 
         <section className="grid grid-cols-[minmax(0,1.15fr)_minmax(360px,.85fr)] items-stretch gap-4 max-xl:grid-cols-1">
           <div className="card h-full">
-            <div className="mb-3 flex items-start justify-between gap-4 max-md:flex-col">
+            <div className="mb-3 flex items-start justify-between gap-3">
               <div>
                 <h2 className="section-title">통장현금 잔고</h2>
                 <p className="mt-1 text-sm text-slate-500">은행·증권·선급금 등 현금성 항목별 보유 비중입니다.</p>
               </div>
-              <div className="text-right max-md:text-left">
-                <div className="eyebrow">총 잔고</div>
-                <div className="mt-1 text-xl font-black text-slate-950">{formatKRW(cashBalanceTotal)}</div>
-              </div>
+              <span className="badge badge-good">자산 중 {percent(cashBalanceTotal, totalAssets)}</span>
             </div>
-            <div className="grid grid-cols-[330px_minmax(0,1fr)] gap-4 max-lg:grid-cols-1">
-              <DonutPanel segments={cashSegments.slice(0, 6)} title="현금성 자산 구성" totalLabel="현금 잔고" totalValue={formatCompactKRW(cashBalanceTotal)} />
-              <div className="grid gap-3">
-                {cashRows.sort((a, b) => b.amount - a.amount).map((row, index) => (
-                  <RankBar amount={row.amount} color={chartColors[index % chartColors.length]} count={1} key={row.id} label={row.name} total={cashBalanceTotal || 1} />
-                ))}
-              </div>
+            <SummaryBox label="현금성 잔액 합계" tone="teal" value={formatKRW(cashBalanceTotal)} />
+            <div className="mt-3">
+              <StackedBar segments={cashSegments.slice(0, 6)} />
             </div>
           </div>
 
@@ -411,10 +466,7 @@ export default async function DashboardPage() {
               </div>
               <span className="badge badge-warning">부채 중 {percent(loanTotal, totalLiabilities)}</span>
             </div>
-            <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
-              <div className="eyebrow">대출 잔액 합계</div>
-              <div className="mt-2 text-2xl font-black text-slate-950">{formatKRW(loanTotal)}</div>
-            </div>
+            <SummaryBox label="대출 잔액 합계" tone="stone" value={formatKRW(loanTotal)} />
             <div className="mt-3">
               <StackedBar segments={loanSegments.slice(0, 6)} />
             </div>
@@ -431,21 +483,24 @@ export default async function DashboardPage() {
               <Link href="/bank" className="btn btn-soft">통장 상세 <ArrowRight size={14} /></Link>
             </div>
             <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
-              <div className="rounded-lg border border-teal-100 bg-teal-50/70 p-3">
-                <div className="eyebrow">입금</div>
-                <div className="mt-2 text-xl font-black text-slate-950">{formatKRW(cashIn)}</div>
-                <div className="mt-1 text-xs text-slate-500">{bankRows.filter((row) => row.cashFlowType === "입금").length.toLocaleString("ko-KR")}건</div>
-              </div>
-              <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
-                <div className="eyebrow">출금</div>
-                <div className="mt-2 text-xl font-black text-slate-950">{formatKRW(cashOut)}</div>
-                <div className="mt-1 text-xs text-slate-500">은행 {bankRows.filter((row) => row.cashFlowType === "출금").length.toLocaleString("ko-KR")}건 / 카드 {cardRows.length.toLocaleString("ko-KR")}건</div>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <div className="eyebrow">순현금흐름</div>
-                <div className={`mt-2 text-xl font-black ${amountTone(netCashFlow)}`}>{formatKRW(netCashFlow)}</div>
-                <div className="mt-1 text-xs text-slate-500">{signedKRW(netCashFlow)}</div>
-              </div>
+              <CashFlowBox
+                caption={`${bankRows.filter((row) => row.cashFlowType === "입금").length.toLocaleString("ko-KR")}건`}
+                label="입금"
+                tone="teal"
+                value={formatKRW(cashIn)}
+              />
+              <CashFlowBox
+                caption={`은행 ${bankRows.filter((row) => row.cashFlowType === "출금").length.toLocaleString("ko-KR")}건 / 카드 ${cardRows.length.toLocaleString("ko-KR")}건`}
+                label="출금"
+                tone="stone"
+                value={formatKRW(cashOut)}
+              />
+              <CashFlowBox
+                caption={signedKRW(netCashFlow)}
+                label="순현금흐름"
+                value={formatKRW(netCashFlow)}
+                valueClassName={amountTone(netCashFlow)}
+              />
             </div>
           </div>
         </section>
