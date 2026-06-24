@@ -16,9 +16,9 @@ import { getDashboardData } from "@/services/dashboard/liveData";
 import type { BalanceMovement, Transaction } from "@/types/finance";
 
 const expenseCategoryOrder = ["인재투자", "환불", "급여", "광고비", "세금", "운영비", "기타"] as const;
-const chartColors = ["#2f3a4a", "#647084", "#2f6f6d", "#9a7a39", "#76685d", "#8a4d4f", "#4f6f52"];
-const inflowColor = "#2f6f6d";
-const outflowColor = "#9a7a39";
+const chartColors = ["#2f5f9e", "#69a2d8", "#52beb7", "#f2a65e", "#7d82df", "#8aa0b7", "#ef8371"];
+const inflowColor = "#4db6ac";
+const outflowColor = "#f2a65e";
 
 type Segment = {
   label: string;
@@ -166,23 +166,22 @@ function KpiCard({
   tone?: "blue" | "green" | "amber" | "slate";
 }) {
   const toneStyle = {
-    blue: { accent: "#2f3a4a", iconBg: "#f1f5f9" },
-    green: { accent: inflowColor, iconBg: "#eef6f5" },
-    amber: { accent: outflowColor, iconBg: "#f8f2e7" },
-    slate: { accent: "#1f2937", iconBg: "#f3f4f6" }
+    blue: { bg: "linear-gradient(135deg, #2f5f9e 0%, #2a548f 100%)", shadow: "0 12px 26px rgba(47, 95, 158, .18)" },
+    green: { bg: "linear-gradient(135deg, #327f98 0%, #2d6185 100%)", shadow: "0 12px 26px rgba(47, 95, 158, .16)" },
+    amber: { bg: "linear-gradient(135deg, #3b6ca0 0%, #315784 100%)", shadow: "0 12px 26px rgba(47, 95, 158, .16)" },
+    slate: { bg: "linear-gradient(135deg, #365173 0%, #2f3f5d 100%)", shadow: "0 12px 26px rgba(54, 81, 115, .16)" }
   }[tone];
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm shadow-slate-100">
-      <div className="mb-3 h-1 w-12 rounded-full" style={{ backgroundColor: toneStyle.accent }} />
+    <div className="rounded-lg p-4 text-white" style={{ background: toneStyle.bg, boxShadow: toneStyle.shadow }}>
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3 text-sm font-black text-slate-700">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: toneStyle.iconBg, color: toneStyle.accent }}>{icon}</span>
+        <div className="flex items-center gap-3 whitespace-nowrap text-[13px] font-black text-white/90">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/15 text-white">{icon}</span>
           {label}
         </div>
-        <div className="text-right text-2xl font-black tracking-tight text-slate-950">{value}</div>
+        <div className="whitespace-nowrap text-right text-2xl font-black tracking-tight">{value}</div>
       </div>
-      <div className="mt-3 text-xs font-bold text-slate-500">{caption}</div>
+      <div className="mt-3 text-xs font-bold text-white/75">{caption}</div>
     </div>
   );
 }
@@ -201,7 +200,7 @@ function DonutPanel({
   const total = sumBy(segments, (segment) => segment.amount);
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
+    <div className="h-fit rounded-lg border border-slate-200 bg-white p-3">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="text-sm font-black text-slate-950">{title}</h3>
         <span className="badge badge-muted">{segments.length.toLocaleString("ko-KR")}개</span>
@@ -217,10 +216,11 @@ function DonutPanel({
         </div>
         <div className="grid gap-1.5">
           {segments.map((segment) => (
-            <div className="grid grid-cols-[12px_minmax(0,1fr)_auto] items-center gap-2 text-sm" key={segment.label}>
-              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: segment.color }} />
+            <div className="grid grid-cols-[8px_minmax(0,1fr)_minmax(46px,auto)_34px] items-center gap-1.5 text-xs" key={segment.label}>
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: segment.color }} />
               <span className="truncate font-bold text-slate-700">{segment.label}</span>
-              <span className="text-xs font-black text-slate-500">{percent(segment.amount, total)}</span>
+              <span className="text-right text-xs font-black text-slate-700">{formatCompactKRW(segment.amount)}</span>
+              <span className="text-right text-xs font-black text-slate-500">{percent(segment.amount, total)}</span>
             </div>
           ))}
         </div>
@@ -263,21 +263,17 @@ function RankBar({
   label: string;
   amount: number;
   total: number;
-  count: number;
+  count?: number;
   color: string;
 }) {
   return (
-    <div>
-      <div className="mb-1 flex items-center justify-between gap-3 text-sm">
-        <span className="truncate font-black text-slate-700">{label}</span>
-        <span className="shrink-0 font-black text-slate-950">{formatKRW(amount)}</span>
+    <div className="grid grid-cols-[minmax(96px,150px)_minmax(80px,1fr)_minmax(96px,auto)_42px] items-center gap-2 text-sm max-md:grid-cols-1">
+      <span className="truncate font-black text-slate-700">{label}</span>
+      <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+        <div className="h-full rounded-full" style={{ width: `${ratio(amount, total)}%`, backgroundColor: color }} />
       </div>
-      <div className="grid grid-cols-[minmax(0,1fr)_52px] items-center gap-3">
-        <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
-          <div className="h-full rounded-full" style={{ width: `${ratio(amount, total)}%`, backgroundColor: color }} />
-        </div>
-        <span className="text-right text-xs font-black text-slate-500">{count.toLocaleString("ko-KR")}건</span>
-      </div>
+      <span className="whitespace-nowrap text-right font-black text-slate-950 max-md:text-left">{formatKRW(amount)}</span>
+      <span className="whitespace-nowrap text-right text-xs font-black text-slate-500 max-md:text-left">{count ? `${count.toLocaleString("ko-KR")}건` : percent(amount, total)}</span>
     </div>
   );
 }
@@ -418,7 +414,7 @@ export default async function DashboardPage() {
           <KpiCard caption={`자산 대비 자본 ${percent(equity, totalAssets)}`} icon={<WalletCards size={19} />} label="자본" tone="slate" value={formatCompactKRW(equity)} />
         </section>
 
-        <section className="grid grid-cols-[minmax(0,1.15fr)_minmax(360px,.85fr)] gap-4 max-xl:grid-cols-1">
+        <section className="grid grid-cols-[minmax(0,1.15fr)_minmax(360px,.85fr)] items-start gap-4 max-xl:grid-cols-1">
           <div className="card">
             <div className="mb-3 flex items-start justify-between gap-4 max-md:flex-col">
               <div>
@@ -430,7 +426,7 @@ export default async function DashboardPage() {
                 <div className="mt-1 text-xl font-black text-slate-950">{formatKRW(cashBalanceTotal)}</div>
               </div>
             </div>
-            <div className="grid grid-cols-[245px_minmax(0,1fr)] gap-4 max-lg:grid-cols-1">
+            <div className="grid grid-cols-[330px_minmax(0,1fr)] gap-4 max-lg:grid-cols-1">
               <DonutPanel segments={cashSegments.slice(0, 6)} title="현금성 자산 구성" totalLabel="현금 잔고" totalValue={formatCompactKRW(cashBalanceTotal)} />
               <div className="grid gap-3">
                 {cashRows.sort((a, b) => b.amount - a.amount).map((row, index) => (
@@ -458,7 +454,7 @@ export default async function DashboardPage() {
           </div>
         </section>
 
-        <section className="grid grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
+        <section className="grid grid-cols-[minmax(0,1fr)_320px] items-start gap-4 max-xl:grid-cols-1">
           <div className="card">
             <div className="mb-3 flex items-start justify-between gap-3 max-md:flex-col">
               <div>
@@ -494,7 +490,7 @@ export default async function DashboardPage() {
           <DonutPanel segments={capitalSegments} title="자산 대비 부채/자본" totalLabel="총자산" totalValue={formatCompactKRW(totalAssets)} />
         </section>
 
-        <section className="grid grid-cols-[minmax(0,1fr)_minmax(360px,.92fr)] gap-4 max-xl:grid-cols-1">
+        <section className="grid grid-cols-[minmax(0,1fr)_minmax(360px,.92fr)] items-start gap-4 max-xl:grid-cols-1">
           <div className="card">
             <div className="mb-3 flex items-center justify-between gap-3 max-md:flex-col max-md:items-start">
               <div>
@@ -516,7 +512,7 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          <div className="grid gap-4">
+          <div className="grid h-fit gap-4">
             <DonutPanel segments={assetSegments} title="자산 구성" totalLabel="총자산" totalValue={formatCompactKRW(totalAssets)} />
             <DonutPanel segments={liabilitySegments} title="부채 구성" totalLabel="총부채" totalValue={formatCompactKRW(totalLiabilities)} />
           </div>
@@ -530,7 +526,7 @@ export default async function DashboardPage() {
             </div>
             <Link href="/expenses" className="btn btn-soft">지출 분석 <ArrowRight size={14} /></Link>
           </div>
-          <div className="grid grid-cols-[minmax(0,1fr)_330px] gap-4 max-xl:grid-cols-1">
+          <div className="grid grid-cols-[minmax(0,1fr)_330px] items-start gap-4 max-xl:grid-cols-1">
             <div className="grid gap-3">
               {expenseCategoryRows.map((row) => (
                 <RankBar amount={row.amount} color={row.color} count={row.count} key={row.category} label={`${row.category} · ${percent(row.amount, totalExpense)}`} total={totalExpense || 1} />
