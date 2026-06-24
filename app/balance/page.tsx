@@ -22,7 +22,7 @@ type BalanceDetailRow = {
   memo: string;
 };
 
-const assetGroupOrder = ["현금성자산", "차량가액", "보증금", "대여금", "유형자산", "무형자산", "기타자산"];
+const assetGroupOrder = ["현금성자산", "차량가액", "보증금", "대여금", "광고비", "유형자산", "무형자산", "기타자산"];
 const liabilityGroupOrder = ["차량부채", "은행대출부채", "미지급/예정부채", "기타부채"];
 
 function compact(value: string | undefined) {
@@ -38,16 +38,17 @@ function classifyBalanceGroup(row: BalanceMovement) {
 
   if (row.statementType === "부채") {
     if (includesAny(text, ["차량", "리스"])) return "차량부채";
-    if (includesAny(text, ["은행", "대출", "차입"])) return "은행대출부채";
+    if (includesAny(text, ["은행", "대출", "차입", "중진공", "기.보", "기보", "증신공", "클린보증"])) return "은행대출부채";
     if (includesAny(text, ["카드", "광고비", "급여", "예정", "미지급"])) return "미지급/예정부채";
     return "기타부채";
   }
 
-  if (includesAny(text, ["현금", "예금", "통장", "증권", "현금성"])) return "현금성자산";
+  if (includesAny(text, ["현금", "예금", "통장", "증권", "현금성", "선급금", "공제부금"])) return "현금성자산";
   if (includesAny(text, ["차량", "법인차"])) return "차량가액";
   if (includesAny(text, ["보증금", "임차보증금"])) return "보증금";
-  if (includesAny(text, ["대여금"])) return "대여금";
-  if (includesAny(text, ["토지", "비품", "유형자산", "건물", "시설", "전자칠판", "나스", "장비", "집기"])) return "유형자산";
+  if (includesAny(text, ["대여금", "투자금"])) return "대여금";
+  if (includesAny(text, ["광고비", "메조미디어", "역량지급"])) return "광고비";
+  if (includesAny(text, ["토지", "비품", "유형자산", "건물", "시설", "전자칠판", "나스", "장비", "집기", "인테리어", "사옥", "필지", "건축설계", "두암동", "동명동"])) return "유형자산";
   if (includesAny(text, ["무형자산", "앱개발", "앱", "소프트웨어", "지식재산", "특허", "상표"])) return "무형자산";
   return "기타자산";
 }
@@ -84,6 +85,7 @@ function detailLabelFor(group: string) {
     차량가액: "차량 목록",
     보증금: "물건별 보증금",
     대여금: "대여처별 잔액",
+    광고비: "광고비 잔액",
     유형자산: "유형자산 목록",
     무형자산: "무형자산 목록",
     차량부채: "차량별 부채",
@@ -126,7 +128,8 @@ function movementDetail(row: BalanceViewRow): BalanceDetailRow {
 }
 
 function detailRowsForGroup(group: string, rows: BalanceViewRow[], bankAccounts: BankAccount[] = []) {
-  if (group === "현금성자산") {
+  const hasGranularRows = rows.length > 1 || rows.some((row) => !includesAny(compact(row.category), ["현금성자산"]));
+  if (group === "현금성자산" && !hasGranularRows) {
     const accountDetails = bankAccountDetails(bankAccounts);
     if (accountDetails.length > 0) return accountDetails;
   }
@@ -185,7 +188,7 @@ function BalanceGroupSection({
                 <div className="text-lg font-black text-slate-950">{formatKRW(groupTotal)}</div>
               </div>
               <p className="mb-3 text-xs leading-5 text-slate-500">
-                {group === "현금성자산"
+                {group === "현금성자산" && details.some((row) => row.id.startsWith("bank-"))
                   ? "계좌 마스터의 은행별 잔액을 우선 표시합니다."
                   : "월별 자산·부채 업로드의 세부 항목명을 그대로 표시합니다."}
               </p>
@@ -238,9 +241,9 @@ export default async function BalancePage() {
   const viewRows = toViewRows(balanceMovements);
   const assets = viewRows.filter((row) => row.statementType === "자산");
   const liabilities = viewRows.filter((row) => row.statementType === "부채");
-  const cashAccountTotal = sumBy(bankAccountDetails(bankAccounts), (row) => row.ending);
-  const balanceCashTotal = sumBy(assets.filter((row) => row.group === "현금성자산"), (row) => row.ending);
-  const totalAssets = sumBy(assets.filter((row) => row.group !== "현금성자산"), (row) => row.ending) + (cashAccountTotal || balanceCashTotal);
+  const cashRows = assets.filter((row) => row.group === "현금성자산");
+  const cashDetails = detailRowsForGroup("현금성자산", cashRows, bankAccounts);
+  const totalAssets = sumBy(assets.filter((row) => row.group !== "현금성자산"), (row) => row.ending) + sumBy(cashDetails, (row) => row.ending);
   const totalLiabilities = sumBy(liabilities, (row) => row.ending);
   const equity = totalAssets - totalLiabilities;
 
@@ -263,7 +266,7 @@ export default async function BalancePage() {
           <div className="eyebrow">업로드 기준</div>
           <div className="mt-2 text-sm leading-6 text-slate-600">
             권장 컬럼: 기준월, 구분, 항목, 기초, 증가, 감소, 메모<br />
-            현금성자산은 계좌 마스터의 은행별 잔액을 우선 표시합니다.
+            현금성자산은 업로드된 은행별 잔액이 있으면 그 값을 우선 표시합니다.
           </div>
           <Link className="btn mt-4 w-full" href="/uploads">자산·부채 파일 업로드</Link>
         </div>

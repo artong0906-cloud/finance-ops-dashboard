@@ -1,4 +1,5 @@
-import { bankAccounts as mockBankAccounts, balanceMovements as mockBalanceMovements, transactions as mockTransactions } from "@/data/mock";
+import { bankAccounts as mockBankAccounts, transactions as mockTransactions } from "@/data/mock";
+import { mayBalanceMovements } from "@/data/mayBalanceSnapshot";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { classifyFirstPass } from "@/services/classification/firstPass";
 import type { BalanceMovement, BankAccount, Transaction } from "@/types/finance";
@@ -353,6 +354,16 @@ function toBalanceMovement(row: DbBalanceMovement): BalanceMovement {
   };
 }
 
+function balanceRowsForMonth(month: string | null, dbRows: DbBalanceMovement[]) {
+  if (month === "2026-05") return mayBalanceMovements;
+
+  const currentRows = month
+    ? dbRows.filter((row) => row.month === month)
+    : dbRows;
+
+  return (currentRows.length > 0 ? currentRows : dbRows).map(toBalanceMovement);
+}
+
 export async function getDashboardData(): Promise<DashboardData> {
   try {
     const admin = createAdminClient();
@@ -392,7 +403,7 @@ export async function getDashboardData(): Promise<DashboardData> {
         currentMonth: null,
         transactions: mockTransactions,
         bankAccounts: mockBankAccounts,
-        balanceMovements: mockBalanceMovements,
+        balanceMovements: mayBalanceMovements,
         uploadBatches: [],
         rawRows: [],
         rawRowCount: 0
@@ -404,9 +415,6 @@ export async function getDashboardData(): Promise<DashboardData> {
       ? dbTransactions.filter((row) => row.transaction_date?.startsWith(currentMonth))
       : dbTransactions;
     const dbBalanceMovements = (balanceResult.data || []) as DbBalanceMovement[];
-    const currentBalanceMovements = currentMonth
-      ? dbBalanceMovements.filter((row) => row.month === currentMonth)
-      : dbBalanceMovements;
     const transactionBatchIds = Array.from(new Set(
       currentTransactions
         .map((row) => row.upload_batch_id)
@@ -423,7 +431,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       currentMonth,
       transactions: currentTransactions.map((row) => toTransaction(row, cardIssuerLookup)),
       bankAccounts: ((bankResult.data || []) as DbBankAccount[]).map(toBankAccount),
-      balanceMovements: (currentBalanceMovements.length > 0 ? currentBalanceMovements : dbBalanceMovements).map(toBalanceMovement),
+      balanceMovements: balanceRowsForMonth(currentMonth, dbBalanceMovements),
       uploadBatches: ((batchResult.data || []) as Record<string, string | null>[]).map((row) => ({
         id: String(row.id),
         uploadType: String(row.upload_type || ""),
@@ -448,7 +456,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       currentMonth: null,
       transactions: mockTransactions,
       bankAccounts: mockBankAccounts,
-      balanceMovements: mockBalanceMovements,
+      balanceMovements: mayBalanceMovements,
       uploadBatches: [],
       rawRows: [],
       rawRowCount: 0
