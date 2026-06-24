@@ -19,6 +19,8 @@ type BalanceDetailRow = {
   increaseAmount: number | null;
   decreaseAmount: number | null;
   ending: number;
+  acquiredAt?: string;
+  monthlyDepreciation?: number;
   memo: string;
 };
 
@@ -123,6 +125,8 @@ function movementDetail(row: BalanceViewRow): BalanceDetailRow {
     increaseAmount: row.increaseAmount,
     decreaseAmount: row.decreaseAmount,
     ending: row.ending,
+    acquiredAt: row.acquiredAt,
+    monthlyDepreciation: row.monthlyDepreciation,
     memo: row.memo || "-"
   };
 }
@@ -207,33 +211,63 @@ function BalanceGroupSection({
               </summary>
               <div className="border-t border-slate-200 bg-white p-4">
                 <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>{label}</th>
-                        <th className="text-right">기초</th>
-                        <th className="text-right">증가</th>
-                        <th className="text-right">감소</th>
-                        <th className="text-right">잔액</th>
-                        <th>메모</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {details.map((row) => (
-                        <tr key={row.id}>
-                          <td>
-                            <div className="font-black">{row.name}</div>
-                            <div className="mt-1 text-xs font-bold text-slate-400">{row.caption}</div>
-                          </td>
-                          <td className="text-right">{displayAmount(row.openingAmount)}</td>
-                          <td className="text-right">{displayAmount(row.increaseAmount)}</td>
-                          <td className="text-right">{displayAmount(row.decreaseAmount)}</td>
-                          <td className="text-right font-black">{formatKRW(row.ending)}</td>
-                          <td>{row.memo}</td>
+                  {group === "차량가액" ? (
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>차량명</th>
+                          <th>취득일</th>
+                          <th className="text-right">취득가</th>
+                          <th className="text-right">누적 감가</th>
+                          <th className="text-right">차량가액</th>
+                          <th className="text-right">당월 감가</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {details.map((row) => (
+                          <tr key={row.id}>
+                            <td>
+                              <div className="font-black">{row.name}</div>
+                              <div className="mt-1 text-xs font-bold text-slate-400">{row.caption}</div>
+                            </td>
+                            <td>{row.acquiredAt || "-"}</td>
+                            <td className="text-right">{displayAmount(row.openingAmount)}</td>
+                            <td className="text-right">{displayAmount(row.decreaseAmount)}</td>
+                            <td className="text-right font-black">{formatKRW(row.ending)}</td>
+                            <td className="text-right">{displayAmount(row.monthlyDepreciation ?? null)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>{label}</th>
+                          <th className="text-right">기초</th>
+                          <th className="text-right">증가</th>
+                          <th className="text-right">감소</th>
+                          <th className="text-right">잔액</th>
+                          <th>메모</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {details.map((row) => (
+                          <tr key={row.id}>
+                            <td>
+                              <div className="font-black">{row.name}</div>
+                              <div className="mt-1 text-xs font-bold text-slate-400">{row.caption}</div>
+                            </td>
+                            <td className="text-right">{displayAmount(row.openingAmount)}</td>
+                            <td className="text-right">{displayAmount(row.increaseAmount)}</td>
+                            <td className="text-right">{displayAmount(row.decreaseAmount)}</td>
+                            <td className="text-right font-black">{formatKRW(row.ending)}</td>
+                            <td>{row.memo}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               </div>
             </details>

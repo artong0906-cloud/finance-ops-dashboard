@@ -51,5 +51,7 @@ export type BalanceMovement = {
   openingAmount: number;
   increaseAmount: number;
   decreaseAmount: number;
+  acquiredAt?: string;
+  monthlyDepreciation?: number;
   memo?: string;
 };

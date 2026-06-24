@@ -2,10 +2,6 @@ import type { BalanceMovement } from "@/types/finance";
 
 const month = "2026-05";
 
-function amountLabel(value: number) {
-  return value.toLocaleString("ko-KR");
-}
-
 function asset(
   id: string,
   category: string,
@@ -47,13 +43,17 @@ function vehicle(
   currentValue: number,
   monthlyDepreciation: number
 ) {
-  return asset(
-    `vehicle-${id}`,
-    name,
-    currentValue,
-    `법인차량 · 취득일 ${acquiredAt} · 취득가 ${amountLabel(acquisitionCost)} · 당월 감가액 ${amountLabel(monthlyDepreciation)}`,
-    acquisitionCost
-  );
+  return {
+    ...asset(
+      `vehicle-${id}`,
+      name,
+      currentValue,
+      "법인차량",
+      acquisitionCost
+    ),
+    acquiredAt,
+    monthlyDepreciation
+  };
 }
 
 function deposit(id: string, name: string, amount: number) {
