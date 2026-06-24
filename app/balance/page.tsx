@@ -177,51 +177,66 @@ function BalanceGroupSection({
           const label = detailLabelFor(group);
 
           return (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4" key={group}>
-              <div className="mb-3 flex items-center justify-between gap-3 max-md:flex-col max-md:items-start">
-                <div>
-                  <span className={statementType === "자산" ? "badge badge-good" : "badge badge-warning"}>{group}</span>
-                  <span className="ml-2 text-xs font-bold text-slate-500">
-                    {label} · {details.length.toLocaleString("ko-KR")}개
+            <details className="group overflow-hidden rounded-lg border border-slate-200 bg-slate-50" key={group}>
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-4 transition hover:bg-white max-md:flex-col max-md:items-start [&::-webkit-details-marker]:hidden">
+                <div className="min-w-0">
+                  <div>
+                    <span className={statementType === "자산" ? "badge badge-good" : "badge badge-warning"}>{group}</span>
+                    <span className="ml-2 text-xs font-bold text-slate-500">
+                      {label} · {details.length.toLocaleString("ko-KR")}개
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                    {group === "현금성자산" && details.some((row) => row.id.startsWith("bank-"))
+                      ? "계좌 마스터의 은행별 잔액을 우선 표시합니다."
+                      : "월별 자산·부채 업로드의 세부 항목명을 그대로 표시합니다."}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3 max-md:w-full max-md:justify-between">
+                  <div className="text-right max-md:text-left">
+                    <div className="text-xs font-black text-slate-400">상세내역 총액</div>
+                    <div className="mt-1 text-lg font-black text-slate-950">{formatKRW(groupTotal)}</div>
+                  </div>
+                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-black text-slate-600 group-open:hidden">
+                    상세 열기
+                  </span>
+                  <span className="hidden rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-black text-blue-700 group-open:inline-flex">
+                    상세 닫기
                   </span>
                 </div>
-                <div className="text-lg font-black text-slate-950">{formatKRW(groupTotal)}</div>
-              </div>
-              <p className="mb-3 text-xs leading-5 text-slate-500">
-                {group === "현금성자산" && details.some((row) => row.id.startsWith("bank-"))
-                  ? "계좌 마스터의 은행별 잔액을 우선 표시합니다."
-                  : "월별 자산·부채 업로드의 세부 항목명을 그대로 표시합니다."}
-              </p>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>{label}</th>
-                      <th className="text-right">기초</th>
-                      <th className="text-right">증가</th>
-                      <th className="text-right">감소</th>
-                      <th className="text-right">잔액</th>
-                      <th>메모</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {details.map((row) => (
-                      <tr key={row.id}>
-                        <td>
-                          <div className="font-black">{row.name}</div>
-                          <div className="mt-1 text-xs font-bold text-slate-400">{row.caption}</div>
-                        </td>
-                        <td className="text-right">{displayAmount(row.openingAmount)}</td>
-                        <td className="text-right">{displayAmount(row.increaseAmount)}</td>
-                        <td className="text-right">{displayAmount(row.decreaseAmount)}</td>
-                        <td className="text-right font-black">{formatKRW(row.ending)}</td>
-                        <td>{row.memo}</td>
+              </summary>
+              <div className="border-t border-slate-200 bg-white p-4">
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>{label}</th>
+                        <th className="text-right">기초</th>
+                        <th className="text-right">증가</th>
+                        <th className="text-right">감소</th>
+                        <th className="text-right">잔액</th>
+                        <th>메모</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {details.map((row) => (
+                        <tr key={row.id}>
+                          <td>
+                            <div className="font-black">{row.name}</div>
+                            <div className="mt-1 text-xs font-bold text-slate-400">{row.caption}</div>
+                          </td>
+                          <td className="text-right">{displayAmount(row.openingAmount)}</td>
+                          <td className="text-right">{displayAmount(row.increaseAmount)}</td>
+                          <td className="text-right">{displayAmount(row.decreaseAmount)}</td>
+                          <td className="text-right font-black">{formatKRW(row.ending)}</td>
+                          <td>{row.memo}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            </details>
           );
         })}
 
