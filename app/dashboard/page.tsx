@@ -278,28 +278,6 @@ function RankBar({
   );
 }
 
-function FlowBars({
-  rows,
-  maxAmount
-}: {
-  rows: { label: string; cashIn: number; cashOut: number }[];
-  maxAmount: number;
-}) {
-  return (
-    <div className="grid h-44 grid-cols-12 items-end gap-2 border-b border-slate-200 pt-3 max-lg:grid-cols-6">
-      {rows.map((row) => (
-        <div className="grid h-full grid-rows-[1fr_auto] gap-2" key={row.label}>
-          <div className="flex items-end justify-center gap-1">
-            <div className="w-3 rounded-t" style={{ height: `${Math.max(5, ratio(row.cashIn, maxAmount))}%`, backgroundColor: inflowColor }} title={`입금 ${formatKRW(row.cashIn)}`} />
-            <div className="w-3 rounded-t" style={{ height: `${Math.max(5, ratio(row.cashOut, maxAmount))}%`, backgroundColor: outflowColor }} title={`출금 ${formatKRW(row.cashOut)}`} />
-          </div>
-          <div className="truncate text-center text-[11px] font-bold text-slate-400">{row.label}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function FinancialCard({
   label,
   value,
@@ -376,17 +354,6 @@ export default async function DashboardPage() {
   const netCashFlow = cashIn - cashOut;
   const bankRows = operatingRows.filter((row) => row.source === "은행");
   const cardRows = operatingRows.filter((row) => row.source === "카드");
-  const flowRows = Array.from(
-    operatingRows.reduce((acc, row) => {
-      const date = row.date.slice(5).replace("-", ".");
-      const current = acc.get(date) || { label: date, cashIn: 0, cashOut: 0 };
-      if (row.cashFlowType === "입금") current.cashIn += row.amount;
-      if (row.cashFlowType === "출금") current.cashOut += row.amount;
-      acc.set(date, current);
-      return acc;
-    }, new Map<string, { label: string; cashIn: number; cashOut: number }>())
-  ).map(([, value]) => value).sort((a, b) => a.label.localeCompare(b.label)).slice(-12);
-  const maxFlowAmount = Math.max(1, ...flowRows.flatMap((row) => [row.cashIn, row.cashOut]));
 
   const expenseRows = operatingRows.filter((row) => row.cashFlowType === "출금");
   const totalExpense = sumBy(expenseRows, (row) => row.amount);
@@ -480,20 +447,15 @@ export default async function DashboardPage() {
                 <div className="mt-1 text-xs text-slate-500">{signedKRW(netCashFlow)}</div>
               </div>
             </div>
-            <FlowBars maxAmount={maxFlowAmount} rows={flowRows} />
-            <div className="mt-3 flex items-center gap-4 text-xs font-bold text-slate-500">
-              <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: inflowColor }} />입금</span>
-              <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: outflowColor }} />출금</span>
-            </div>
           </div>
         </section>
 
-        <section className="grid grid-cols-[minmax(0,1fr)_360px] items-start gap-4 max-xl:grid-cols-1">
-          <div className="card">
+        <section className="card">
+          <div>
             <div className="mb-3 flex items-center justify-between gap-3 max-md:flex-col max-md:items-start">
               <div>
                 <h2 className="section-title">자산 · 부채 · 자본</h2>
-                <p className="mt-1 text-sm text-slate-500">기말 잔액과 전월비 증감액을 함께 표시합니다.</p>
+                <p className="mt-1 text-sm text-slate-500">기말 잔액, 전월비 증감액, 구성 비중을 한 섹션에서 봅니다.</p>
               </div>
               <WalletCards size={20} className="text-slate-400" />
             </div>
@@ -508,12 +470,11 @@ export default async function DashboardPage() {
                 { label: "자본", amount: equity, color: inflowColor }
               ]} />
             </div>
-          </div>
-
-          <div className="grid h-fit gap-4">
-            <DonutPanel segments={capitalSegments} title="자산 대비 부채/자본" totalLabel="총자산" totalValue={formatCompactKRW(totalAssets)} />
-            <DonutPanel segments={assetSegments} title="자산 구성" totalLabel="총자산" totalValue={formatCompactKRW(totalAssets)} />
-            <DonutPanel segments={liabilitySegments} title="부채 구성" totalLabel="총부채" totalValue={formatCompactKRW(totalLiabilities)} />
+            <div className="mt-4 grid grid-cols-3 gap-3 max-xl:grid-cols-1">
+              <DonutPanel segments={capitalSegments} title="자산 대비 부채/자본" totalLabel="총자산" totalValue={formatCompactKRW(totalAssets)} />
+              <DonutPanel segments={assetSegments} title="자산 구성" totalLabel="총자산" totalValue={formatCompactKRW(totalAssets)} />
+              <DonutPanel segments={liabilitySegments} title="부채 구성" totalLabel="총부채" totalValue={formatCompactKRW(totalLiabilities)} />
+            </div>
           </div>
         </section>
 
