@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { ArrowRight, ArrowUpRight, ShieldCheck, TrendingUp } from "lucide-react";
+import { ArrowRight, ShieldCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { LoginForm } from "./LoginForm";
 
@@ -37,9 +37,9 @@ export default async function LoginPage({
               <span key={index} />
             ))}
           </div>
-          <div className="login-money-notes" aria-hidden="true">
-            {["note-a", "note-b", "note-c", "note-d", "note-e", "note-f"].map((note) => (
-              <span className={`login-money-note ${note}`} key={note} />
+          <div className="login-coin-field" aria-hidden="true">
+            {["coin-main", "coin-a", "coin-b", "coin-c", "coin-d", "coin-e", "coin-f", "coin-g"].map((coin) => (
+              <span className={`login-flying-coin ${coin}`} key={coin} />
             ))}
           </div>
 
@@ -65,18 +65,7 @@ export default async function LoginPage({
               통장, 카드, 자산과 부채 데이터를 연결해 매출 유입부터 비용 통제, 현금 확보, 자본 성장까지 한 화면에서 읽습니다.
             </p>
 
-            <div className="login-money-stats" aria-label="핵심 재무 흐름">
-              {[
-                { label: "매출 유입", value: "8.7억" },
-                { label: "현금 잔고", value: "4.8억" },
-                { label: "자본", value: "30.5억" }
-              ].map((item) => (
-                <div className="login-money-stat" key={item.label}>
-                  <span>{item.label}</span>
-                  <strong>{item.value}</strong>
-                </div>
-              ))}
-            </div>
+            <div className="mt-7 h-px w-48 bg-gradient-to-r from-[#f6d98c] via-white/40 to-transparent" aria-hidden="true" />
           </div>
 
           <svg className="login-money-growth-line" viewBox="0 0 760 260" role="img" aria-label="재무 성장 흐름">
@@ -107,14 +96,6 @@ export default async function LoginPage({
             <span>현금 확보</span>
             <ArrowRight size={15} />
             <span>자본 성장</span>
-            <span className="login-money-flow-up">
-              <TrendingUp size={15} />
-              +18%
-            </span>
-          </div>
-          <div className="login-money-orbit" aria-hidden="true">
-            <span>₩</span>
-            <ArrowUpRight size={26} />
           </div>
         </div>
 
