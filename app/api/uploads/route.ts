@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidateTag } from "next/cache";
 import { getApiUser } from "@/lib/auth/api";
 import { canUpload } from "@/lib/auth/roles";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -194,6 +195,8 @@ export async function POST(request: NextRequest) {
         if (error) throw error;
       }
     }
+
+    revalidateTag("dashboard-data", { expire: 0 });
 
     return NextResponse.json({
       ok: true,

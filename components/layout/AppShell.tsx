@@ -82,6 +82,7 @@ export async function AppShell({
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch={true}
                   className={`group relative flex min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition max-lg:min-w-[150px] ${
                     active
                       ? "bg-[#2f5f9e] text-white shadow-[0_12px_24px_rgba(47,95,158,.18)]"

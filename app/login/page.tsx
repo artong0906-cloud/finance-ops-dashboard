@@ -20,8 +20,8 @@ export default async function LoginPage({
 
   try {
     const supabase = await createClient();
-    const { data } = await supabase.auth.getUser();
-    if (data.user) redirect(next);
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.user) redirect(next);
   } catch {
     // Keep the login page renderable even before local env vars are configured.
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 export function LoginForm() {
@@ -10,6 +10,11 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const next = searchParams.get("next") || "/dashboard";
+
+  useEffect(() => {
+    router.prefetch(next);
+  }, [next, router]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -17,7 +22,6 @@ export function LoginForm() {
     setIsLoading(true);
 
     try {
-      const next = searchParams.get("next") || "/dashboard";
       const response = await fetch("/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -31,12 +35,10 @@ export function LoginForm() {
         throw new Error(String(result.error || "아이디 또는 비밀번호가 맞지 않습니다."));
       }
 
-      router.refresh();
-      window.location.replace(String(result.next || next));
+      router.replace(String(result.next || next));
     } catch (err) {
       const message = err instanceof Error ? err.message : "로그인 중 오류가 발생했습니다.";
       setError(message);
-    } finally {
       setIsLoading(false);
     }
   }
