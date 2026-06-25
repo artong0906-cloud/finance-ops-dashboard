@@ -8,6 +8,12 @@ import type { Transaction } from "@/types/finance";
 
 const revenueCategories = ["광고사업부 매출", "대외협력부 매출", "플랫폼 매출", "정부지원금", "기타매출"] as const;
 const allFilter = "전체";
+const highlightCardStyles = [
+  { bg: "linear-gradient(135deg, #2f5f9e 0%, #2a548f 100%)", shadow: "0 12px 26px rgba(47, 95, 158, .18)" },
+  { bg: "linear-gradient(135deg, #3b6ca0 0%, #315784 100%)", shadow: "0 12px 26px rgba(47, 95, 158, .16)" },
+  { bg: "linear-gradient(135deg, #327f98 0%, #2d6185 100%)", shadow: "0 12px 26px rgba(47, 95, 158, .16)" },
+  { bg: "linear-gradient(135deg, #365173 0%, #2f3f5d 100%)", shadow: "0 12px 26px rgba(54, 81, 115, .16)" }
+];
 const governmentSupportKeywords = [
   "고용노동부",
   "고용부",
@@ -190,33 +196,33 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
           </div>
           <div className="grid grid-cols-5 gap-3 max-2xl:grid-cols-3 max-xl:grid-cols-2 max-md:grid-cols-1">
             {summaries.map((summary, index) => {
-            const selected = activeFilter === summary.category;
-            const color = chartColors[index % chartColors.length];
+              const selected = activeFilter === summary.category;
+              const cardStyle = highlightCardStyles[index % highlightCardStyles.length];
 
-            return (
-              <a
-                aria-current={selected ? "true" : undefined}
-                className={[
-                  "rounded-lg border bg-white p-4 text-left transition",
-                  selected ? "shadow-sm ring-1 ring-slate-200" : "hover:border-slate-300 hover:bg-slate-50"
-                ].join(" ")}
-                href={filterHref(summary.category)}
-                key={summary.category}
-                style={{ borderColor: selected ? color : undefined }}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className={selected ? "badge" : "badge badge-muted"}>{summary.category}</span>
-                  <span className="text-xs font-black text-slate-400">{summary.share}</span>
-                </div>
-                <div className="mt-4 text-xl font-black text-slate-950">{formatKRW(summary.amount)}</div>
-                <div className="mt-2 text-xs leading-5 text-slate-500">
-                  {summary.rows.length.toLocaleString("ko-KR")}건 · {ruleCaption(summary.category)}
-                </div>
-                <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
-                  <div className="h-full rounded-full" style={{ width: summary.share, backgroundColor: color }} />
-                </div>
-              </a>
-            );
+              return (
+                <a
+                  aria-current={selected ? "true" : undefined}
+                  className={[
+                    "rounded-lg border border-white/10 p-4 text-left text-white transition",
+                    selected ? "ring-2 ring-blue-100" : "hover:-translate-y-0.5 hover:ring-1 hover:ring-white/25"
+                  ].join(" ")}
+                  href={filterHref(summary.category)}
+                  key={summary.category}
+                  style={{ background: cardStyle.bg, boxShadow: selected ? cardStyle.shadow : undefined }}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="inline-flex min-h-[22px] items-center justify-center rounded-full bg-white/15 px-2 py-1 text-[11px] font-black text-white">{summary.category}</span>
+                    <span className="text-xs font-black text-white/70">{summary.share}</span>
+                  </div>
+                  <div className="mt-4 text-xl font-black text-white">{formatKRW(summary.amount)}</div>
+                  <div className="mt-2 text-xs font-bold leading-5 text-white/70">
+                    {summary.rows.length.toLocaleString("ko-KR")}건 · {ruleCaption(summary.category)}
+                  </div>
+                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/15">
+                    <div className="h-full rounded-full bg-white/75" style={{ width: summary.share }} />
+                  </div>
+                </a>
+              );
             })}
           </div>
           <div className="mt-5 grid gap-2">
