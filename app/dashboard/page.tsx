@@ -414,6 +414,8 @@ export default async function DashboardPage() {
   const cashIn = sumBy(operatingRows.filter((row) => row.cashFlowType === "입금"), (row) => row.amount);
   const cashOut = sumBy(operatingRows.filter((row) => row.cashFlowType === "출금"), (row) => row.amount);
   const netCashFlow = cashIn - cashOut;
+  const closingCashBalanceTotal = cashBalanceTotal;
+  const openingCashBalanceTotal = closingCashBalanceTotal - netCashFlow;
   const bankRows = operatingRows.filter((row) => row.source === "은행");
   const cardRows = operatingRows.filter((row) => row.source === "카드");
 
@@ -482,7 +484,13 @@ export default async function DashboardPage() {
               </div>
               <Link href="/bank" className="btn btn-soft">통장 상세 <ArrowRight size={14} /></Link>
             </div>
-            <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
+            <div className="grid grid-cols-5 gap-3 max-2xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
+              <CashFlowBox
+                caption="월말 - 순현금흐름"
+                label="월초잔액"
+                tone="stone"
+                value={formatKRW(openingCashBalanceTotal)}
+              />
               <CashFlowBox
                 caption={`${bankRows.filter((row) => row.cashFlowType === "입금").length.toLocaleString("ko-KR")}건`}
                 label="입금"
@@ -500,6 +508,12 @@ export default async function DashboardPage() {
                 label="순현금흐름"
                 value={formatKRW(netCashFlow)}
                 valueClassName={amountTone(netCashFlow)}
+              />
+              <CashFlowBox
+                caption={`월초 대비 ${signedKRW(netCashFlow)}`}
+                label="월말잔액"
+                tone="teal"
+                value={formatKRW(closingCashBalanceTotal)}
               />
             </div>
           </div>

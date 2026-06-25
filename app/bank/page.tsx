@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { AppShell } from "@/components/layout/AppShell";
-import { chartColors, DonutPanel, inflowColor, outflowColor, RankBar, StackedBar, SummaryBox } from "@/components/shared/FinanceViz";
+import { chartColors, DonutPanel, inflowColor, outflowColor, RankBar, signedKRW, StackedBar, SummaryBox } from "@/components/shared/FinanceViz";
 import { formatCompactKRW, formatKRW, sumBy } from "@/services/dashboard/calculations";
 import { getDashboardData } from "@/services/dashboard/liveData";
 
@@ -20,6 +20,7 @@ export default async function BankPage() {
   const cashInTotal = sumBy(accountRows, (row) => row.cashIn);
   const cashOutTotal = sumBy(accountRows, (row) => row.cashOut);
   const netCashFlow = cashInTotal - cashOutTotal;
+  const openingBalanceTotal = totalBalance - netCashFlow;
   const accountSegments = accountRows
     .filter(({ balance }) => balance > 0)
     .sort((a, b) => b.balance - a.balance)
@@ -36,11 +37,12 @@ export default async function BankPage() {
 
   return (
     <AppShell title="통장 입출금" description="실제 업로드된 5월 은행 거래 기준으로 입금, 출금, 내부이체를 확인합니다." periodLabel={data.currentMonth || "2026-05"} activePath="/bank">
-      <section className="mb-5 grid grid-cols-4 gap-3 max-xl:grid-cols-2 max-md:grid-cols-1">
-        <SummaryBox caption={`${accountSegments.length.toLocaleString("ko-KR")}개 계좌`} label="통장현금 잔고" tone="teal" value={formatKRW(totalBalance)} />
+      <section className="mb-5 grid grid-cols-5 gap-3 max-2xl:grid-cols-3 max-xl:grid-cols-2 max-md:grid-cols-1">
+        <SummaryBox caption="월말 - 순현금흐름" label="월초잔액" tone="stone" value={formatKRW(openingBalanceTotal)} />
         <SummaryBox caption={`${bankRows.filter((row) => row.cashFlowType === "입금").length.toLocaleString("ko-KR")}건`} label="월 입금" value={formatKRW(cashInTotal)} />
         <SummaryBox caption={`${bankRows.filter((row) => row.cashFlowType === "출금").length.toLocaleString("ko-KR")}건`} label="월 출금" tone="stone" value={formatKRW(cashOutTotal)} />
         <SummaryBox caption="입금 - 출금" label="순현금흐름" value={formatKRW(netCashFlow)} />
+        <SummaryBox caption={`월초 대비 ${signedKRW(netCashFlow)}`} label="월말잔액" tone="teal" value={formatKRW(totalBalance)} />
       </section>
 
       <section className="mb-6 grid items-start grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
