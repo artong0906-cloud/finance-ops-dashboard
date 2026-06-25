@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { AppShell } from "@/components/layout/AppShell";
-import { chartColors, DonutPanel, inflowColor, outflowColor, RankBar, signedKRW, StackedBar, SummaryBox } from "@/components/shared/FinanceViz";
+import { chartColors, inflowColor, outflowColor, RankBar, signedKRW, StackedBar, SummaryBox } from "@/components/shared/FinanceViz";
 import { formatCompactKRW, formatKRW, sumBy } from "@/services/dashboard/calculations";
 import { getDashboardData } from "@/services/dashboard/liveData";
 
@@ -45,7 +45,7 @@ export default async function BankPage() {
         <SummaryBox caption={`월초 대비 ${signedKRW(netCashFlow)}`} label="월말잔액" tone="teal" value={formatKRW(totalBalance)} />
       </section>
 
-      <section className="mb-6 grid items-start grid-cols-[minmax(0,1.25fr)_minmax(280px,.85fr)_minmax(0,1fr)] gap-4 max-xl:grid-cols-1">
+      <section className="mb-6 grid items-start grid-cols-2 gap-4 max-xl:grid-cols-1">
         <div className="card self-start">
           <div className="mb-4 flex items-start justify-between gap-4 max-md:flex-col">
             <div>
@@ -67,8 +67,6 @@ export default async function BankPage() {
             ))}
           </div>
         </div>
-
-        <DonutPanel segments={accountSegments} title="계좌 잔고 비중" totalLabel="총 잔고" totalValue={formatCompactKRW(totalBalance)} />
 
         <div className="card min-w-0 overflow-hidden">
           <div className="mb-4 flex items-start justify-between gap-3">

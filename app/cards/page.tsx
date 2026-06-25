@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { AppShell } from "@/components/layout/AppShell";
-import { chartColors, DonutPanel, RankBar, SummaryBox } from "@/components/shared/FinanceViz";
+import { chartColors, RankBar, SummaryBox } from "@/components/shared/FinanceViz";
 import { formatCompactKRW, formatKRW, sumBy } from "@/services/dashboard/calculations";
 import { getDashboardData } from "@/services/dashboard/liveData";
 
@@ -30,11 +30,6 @@ export default async function CardsPage() {
       return acc;
     }, new Map<string, { label: string; amount: number; count: number }>())
   ).map(([, value]) => value).sort((a, b) => b.amount - a.amount).slice(0, 6);
-  const categorySegments = grouped.map((item, index) => ({
-    label: item.label,
-    amount: item.amount,
-    color: chartColors[index % chartColors.length]
-  }));
   const reviewCount = cardRows.filter((row) => row.reviewStatus === "확인필요").length;
 
   return (
@@ -46,7 +41,7 @@ export default async function CardsPage() {
         <SummaryBox caption="5월 임시 귀속" label="집계 기준" tone="teal" value="광고사업부" />
       </section>
 
-      <section className="mb-6 grid items-start grid-cols-[minmax(0,1.25fr)_minmax(280px,.85fr)_minmax(0,1fr)] gap-4 max-xl:grid-cols-1">
+      <section className="mb-6 grid items-start grid-cols-2 gap-4 max-xl:grid-cols-1">
         <div className="card self-start">
           <div className="mb-4 flex items-start justify-between gap-4 max-md:flex-col">
             <div>
@@ -68,8 +63,6 @@ export default async function CardsPage() {
             ))}
           </div>
         </div>
-
-        <DonutPanel segments={categorySegments} title="카드 사용 비중" totalLabel="총 사용" totalValue={formatCompactKRW(total)} />
 
         <div className="card min-w-0 overflow-hidden">
           <div className="mb-4 flex items-start justify-between gap-3">
