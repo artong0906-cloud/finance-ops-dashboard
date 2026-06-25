@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { bankAccounts as mockBankAccounts, transactions as mockTransactions } from "@/data/mock";
 import { mayBalanceMovements } from "@/data/mayBalanceSnapshot";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -364,7 +365,7 @@ function balanceRowsForMonth(month: string | null, dbRows: DbBalanceMovement[]) 
   return (currentRows.length > 0 ? currentRows : dbRows).map(toBalanceMovement);
 }
 
-export async function getDashboardData(): Promise<DashboardData> {
+async function loadDashboardData(): Promise<DashboardData> {
   try {
     const admin = createAdminClient();
     const [
@@ -463,3 +464,8 @@ export async function getDashboardData(): Promise<DashboardData> {
     };
   }
 }
+
+export const getDashboardData = unstable_cache(loadDashboardData, ["finance-dashboard-data-v1"], {
+  revalidate: 15,
+  tags: ["dashboard-data"]
+});

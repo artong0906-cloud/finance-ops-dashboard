@@ -40,9 +40,10 @@ function localDesignReviewSession() {
 
 export async function getAllowedUser() {
   const supabase = await createClient();
-  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  const sessionUser = sessionData.session?.user;
 
-  if (authError || !authData.user?.email) {
+  if (sessionError || !sessionUser?.email) {
     if (await isLocalDesignReview()) return localDesignReviewSession();
     redirect("/login");
   }
@@ -50,7 +51,7 @@ export async function getAllowedUser() {
   const { data: profile, error: profileError } = await supabase
     .from("allowed_users")
     .select("email,login_id,internal_email,name,role,status")
-    .eq("email", authData.user.email)
+    .eq("email", sessionUser.email)
     .eq("status", "active")
     .maybeSingle<AllowedUserProfile>();
 
@@ -59,7 +60,7 @@ export async function getAllowedUser() {
   }
 
   return {
-    user: authData.user,
+    user: sessionUser,
     profile: {
       ...profile,
       login_id: profile.login_id || internalEmailToLoginId(profile.email)
