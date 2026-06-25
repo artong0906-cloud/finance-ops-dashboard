@@ -1,7 +1,6 @@
 import Link from "next/link";
 import {
   BarChart3,
-  Building2,
   CreditCard,
   Database,
   FileUp,
@@ -44,35 +43,38 @@ export async function AppShell({
   const displayName = profile.name || profile.login_id || profile.email || "사용자";
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] lg:grid lg:grid-cols-[216px_minmax(0,1fr)]">
-      <aside className="border-r border-[var(--line)] bg-white lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto max-lg:border-r-0 max-lg:border-b">
+    <div className="min-h-screen bg-[var(--bg)] lg:grid lg:grid-cols-[244px_minmax(0,1fr)]">
+      <aside className="border-r border-[#d8e0ec] bg-[linear-gradient(180deg,#f8fbff_0%,#eef4fb_50%,#f7f9fc_100%)] lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto max-lg:border-r-0 max-lg:border-b">
         <div className="flex h-full flex-col p-3">
-          <Link href="/dashboard" className="flex items-center gap-3 px-2 py-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm shadow-blue-200">
-              <Building2 size={19} />
+          <Link
+            href="/dashboard"
+            className="group flex items-center gap-3 rounded-xl border border-white/80 bg-white/85 px-3 py-3 shadow-[0_12px_28px_rgba(47,95,158,.08)] transition hover:-translate-y-0.5 hover:border-[#c8d7ee] hover:bg-white"
+          >
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#f1f5ff] ring-1 ring-[#d7e3ff] transition group-hover:ring-[#b9ccf4]">
+              <img src="/brand-symbol.png" alt="" className="h-8 w-8 object-contain" />
             </span>
-            <span>
-              <span className="block text-sm font-black">광고인 FinanceOps</span>
-              <span className="block text-[11px] font-bold text-slate-500">경영지원 대시보드</span>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-black text-[#13233b]">광고인 파이낸스OPS</span>
+              <span className="mt-0.5 block truncate text-[11px] font-bold text-[#647896]">경영지원 대시보드</span>
             </span>
           </Link>
 
-          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div className="mt-4 rounded-xl border border-[#d9e5f4] bg-[linear-gradient(135deg,#ffffff_0%,#eef5ff_100%)] p-3 shadow-sm">
             <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500 text-white shadow-sm shadow-blue-100">
-              <ShieldCheck size={16} />
-            </span>
-            <div className="min-w-0">
-              <div className="truncate text-sm font-black">{displayName}</div>
-              <div className="mt-0.5 text-xs font-bold text-slate-500">{profile.role}</div>
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#2f5f9e] text-white shadow-sm shadow-blue-100">
+                <ShieldCheck size={16} />
+              </span>
+              <div className="min-w-0">
+                <div className="truncate text-sm font-black text-[#13233b]">{displayName}</div>
+                <div className="mt-0.5 text-xs font-bold text-[#647896]">{profile.role}</div>
+              </div>
             </div>
-            </div>
-            <div className="mt-3 rounded-lg border border-slate-200 bg-white p-2 text-[11px] leading-5 text-slate-500">
-              로컬에서는 디자인 검토 모드로 바로 열립니다.
+            <div className="mt-3 rounded-lg border border-[#dde7f3] bg-white/80 p-2 text-[11px] leading-5 text-[#647896]">
+              로컬 디자인 검토 모드
             </div>
           </div>
 
-          <nav className="mt-5 grid gap-1 max-lg:flex max-lg:overflow-x-auto max-lg:pb-2">
+          <nav className="mt-5 grid gap-1.5 max-lg:flex max-lg:overflow-x-auto max-lg:pb-2">
             {nav.map((item) => {
               const Icon = item.icon;
               const active = activePath === item.href;
@@ -80,16 +82,22 @@ export async function AppShell({
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`group flex min-w-0 items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold transition max-lg:min-w-[150px] ${
+                  className={`group relative flex min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition max-lg:min-w-[150px] ${
                     active
-                      ? "bg-blue-50 text-blue-700 ring-1 ring-blue-100"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                      ? "bg-[#2f5f9e] text-white shadow-[0_12px_24px_rgba(47,95,158,.18)]"
+                      : "text-[#526781] hover:bg-white/85 hover:text-[#13233b] hover:shadow-sm"
                   }`}
                 >
-                  <Icon size={17} className={`shrink-0 ${active ? "text-blue-600" : "text-slate-400 group-hover:text-slate-700"}`} />
-                  <span className="min-w-0">
+                  <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg transition ${
+                    active
+                      ? "bg-white/15 text-white"
+                      : "bg-white/70 text-[#8aa0b7] ring-1 ring-[#e0e8f2] group-hover:text-[#2f5f9e]"
+                  }`}>
+                    <Icon size={16} />
+                  </span>
+                  <span className={`min-w-0 ${active ? "text-white" : "text-[#526781] group-hover:text-[#13233b]"}`}>
                     <span className="block truncate">{item.label}</span>
-                    <span className="block text-[11px] font-bold text-slate-400">{item.kicker}</span>
+                    <span className={`block text-[11px] font-bold ${active ? "text-white/65" : "text-[#8aa0b7]"}`}>{item.kicker}</span>
                   </span>
                 </Link>
               );
@@ -97,19 +105,19 @@ export async function AppShell({
           </nav>
 
           <div className="mt-auto grid gap-3 pt-5 max-lg:hidden">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <div className="flex items-center gap-2 text-xs font-black text-slate-600">
+            <div className="rounded-xl border border-[#d9e5f4] bg-white/75 p-3 shadow-sm">
+              <div className="flex items-center gap-2 text-xs font-black text-[#526781]">
                 <Database size={14} />
                 운영 기준
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <div className="font-black text-slate-900">{periodLabel}</div>
-                  <div className="mt-1 text-slate-500">집계월</div>
+                  <div className="font-black text-[#13233b]">{periodLabel}</div>
+                  <div className="mt-1 text-[#647896]">집계월</div>
                 </div>
                 <div>
-                  <div className="font-black text-slate-900">실데이터</div>
-                  <div className="mt-1 text-slate-500">화면 기준</div>
+                  <div className="font-black text-[#13233b]">실데이터</div>
+                  <div className="mt-1 text-[#647896]">화면 기준</div>
                 </div>
               </div>
             </div>
