@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { ArrowUpRight, BarChart3, CheckCircle2, Landmark, ShieldCheck, WalletCards } from "lucide-react";
+import { ArrowRight, ArrowUpRight, ShieldCheck, TrendingUp } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { LoginForm } from "./LoginForm";
 
@@ -27,104 +27,94 @@ export default async function LoginPage({
   }
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_18%_12%,#dbeafe_0%,transparent_28%),linear-gradient(135deg,#f7faff_0%,#eef4fb_46%,#f9fbfd_100%)] text-[#111827]">
+    <main className="min-h-screen overflow-hidden bg-[#f5f7fb] text-[#111827]">
       <section className="grid min-h-screen grid-cols-[minmax(0,1fr)_minmax(420px,31vw)] max-lg:grid-cols-1">
-        <div className="relative min-h-screen overflow-hidden px-8 py-7 max-lg:min-h-[620px] max-md:px-5">
-          <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[linear-gradient(180deg,transparent_0%,rgba(221,231,243,.72)_100%)]" />
-          <div className="relative z-10 flex items-center gap-3">
-            <span className="grid h-12 w-12 place-items-center rounded-2xl border border-blue-100 bg-white/85 shadow-[0_18px_38px_rgba(47,95,158,.16)]">
+        <div className="login-money-hero">
+          <div className="login-money-bg" aria-hidden="true" />
+          <div className="login-money-vignette" aria-hidden="true" />
+          <div className="login-money-particles" aria-hidden="true">
+            {Array.from({ length: 24 }).map((_, index) => (
+              <span key={index} />
+            ))}
+          </div>
+          <div className="login-money-notes" aria-hidden="true">
+            {["note-a", "note-b", "note-c", "note-d", "note-e", "note-f"].map((note) => (
+              <span className={`login-money-note ${note}`} key={note} />
+            ))}
+          </div>
+
+          <div className="login-money-brand">
+            <span className="grid h-12 w-12 place-items-center rounded-2xl border border-white/20 bg-white/12 shadow-[0_18px_38px_rgba(0,0,0,.22)] backdrop-blur">
               <img src="/brand-symbol.png" alt="광고인" className="h-9 w-9 object-contain" />
             </span>
             <div>
-              <div className="text-sm font-black text-[#14233b]">광고인</div>
-              <div className="text-xs font-black tracking-[0.18em] text-[#647896]">FINANCE OPERATION</div>
+              <div className="text-sm font-black text-white">광고인</div>
+              <div className="text-xs font-black tracking-[0.18em] text-[#d5b165]">FINANCE OPERATION</div>
             </div>
           </div>
 
-          <div className="relative z-10 mx-auto mt-16 grid max-w-5xl place-items-center text-center max-lg:mt-10">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/65 px-3 py-1.5 text-xs font-black text-[#2f5f9e] shadow-sm backdrop-blur">
+          <div className="login-money-copy">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-black text-[#f6d98c] shadow-sm backdrop-blur">
               <ShieldCheck size={14} />
               Private finance operation room
             </div>
-            <h1 className="mt-5 max-w-3xl text-4xl font-black leading-tight tracking-[-0.03em] text-[#111827] max-md:text-3xl">
-              경영 흐름을 한 화면에서 읽는 재무 컨트롤룸
+            <h1 className="mt-5 max-w-3xl text-5xl font-black leading-[1.04] tracking-[-0.04em] text-white max-xl:text-4xl max-md:text-3xl">
+              현금 흐름이 성장으로 이어지는 Finance Operation
             </h1>
-            <p className="mt-4 max-w-2xl text-sm font-bold leading-7 text-[#647084]">
-              통장, 카드, 자산과 부채 데이터를 연결해 월간 자금 흐름과 운영 지표를 빠르게 확인합니다.
+            <p className="mt-5 max-w-2xl text-base font-bold leading-8 text-[#d9e3ef] max-md:text-sm max-md:leading-7">
+              통장, 카드, 자산과 부채 데이터를 연결해 매출 유입부터 비용 통제, 현금 확보, 자본 성장까지 한 화면에서 읽습니다.
             </p>
+
+            <div className="login-money-stats" aria-label="핵심 재무 흐름">
+              {[
+                { label: "매출 유입", value: "8.7억" },
+                { label: "현금 잔고", value: "4.8억" },
+                { label: "자본", value: "30.5억" }
+              ].map((item) => (
+                <div className="login-money-stat" key={item.label}>
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div className="relative z-10 mx-auto mt-12 max-w-5xl">
-            <div className="login-visual-shell">
-              <div className="login-glow login-glow-a" />
-              <div className="login-glow login-glow-b" />
+          <svg className="login-money-growth-line" viewBox="0 0 760 260" role="img" aria-label="재무 성장 흐름">
+            <defs>
+              <linearGradient id="moneyGrowthGradient" x1="0" x2="1" y1="0" y2="0">
+                <stop offset="0%" stopColor="#f2a65e" />
+                <stop offset="54%" stopColor="#f6d98c" />
+                <stop offset="100%" stopColor="#7ee7d6" />
+              </linearGradient>
+            </defs>
+            <path className="login-money-growth-area" d="M52 206 C145 170 192 192 267 142 C344 91 406 125 482 82 C576 29 642 48 714 24 L714 235 L52 235 Z" />
+            <path className="login-money-growth-path" d="M52 206 C145 170 192 192 267 142 C344 91 406 125 482 82 C576 29 642 48 714 24" />
+            {[
+              [52, 206],
+              [267, 142],
+              [482, 82],
+              [714, 24]
+            ].map(([cx, cy]) => (
+              <circle className="login-money-growth-dot" cx={cx} cy={cy} r="7" key={`${cx}-${cy}`} />
+            ))}
+          </svg>
 
-              <div className="login-float-card login-float-a">
-                <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#eaf2ff] text-[#2f5f9e]"><Landmark size={18} /></span>
-                <div>
-                  <div className="text-[11px] font-black text-[#647896]">Cash Balance</div>
-                  <div className="mt-1 text-lg font-black text-[#13233b]">4.8억</div>
-                </div>
-              </div>
-
-              <div className="login-float-card login-float-b">
-                <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#e9f8f6] text-[#327f98]"><WalletCards size={18} /></span>
-                <div>
-                  <div className="text-[11px] font-black text-[#647896]">Equity Ratio</div>
-                  <div className="mt-1 text-lg font-black text-[#13233b]">41%</div>
-                </div>
-              </div>
-
-              <div className="login-dashboard-card">
-                <div className="mb-5 flex items-center justify-between">
-                  <div>
-                    <div className="text-xs font-black uppercase tracking-[0.2em] text-[#8aa0b7]">May Closing</div>
-                    <div className="mt-1 text-2xl font-black text-[#111827]">FinanceOps Board</div>
-                  </div>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[#ecfdf3] px-3 py-1 text-xs font-black text-[#138a61]">
-                    <CheckCircle2 size={13} />
-                    Synced
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
-                  {[
-                    ["입금", "8.7억", "#2f5f9e"],
-                    ["출금", "9.3억", "#f2a65e"],
-                    ["자본", "30.5억", "#327f98"]
-                  ].map(([label, value, color]) => (
-                    <div className="rounded-2xl border border-[#dbe4ef] bg-white/72 p-4 shadow-sm" key={label}>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-[#647896]">{label}</span>
-                        <ArrowUpRight size={14} style={{ color }} />
-                      </div>
-                      <div className="mt-3 text-2xl font-black text-[#111827]">{value}</div>
-                      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#edf2f7]">
-                        <div className="h-full rounded-full" style={{ width: label === "출금" ? "72%" : label === "입금" ? "66%" : "58%", backgroundColor: color }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-6 rounded-2xl border border-[#dbe4ef] bg-[#f8fbff]/80 p-5">
-                  <div className="mb-5 flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-black text-[#13233b]">월간 자금 흐름</div>
-                      <div className="mt-1 text-xs font-bold text-[#647896]">최근 거래일 기준 입금/출금</div>
-                    </div>
-                    <BarChart3 size={20} className="text-[#8aa0b7]" />
-                  </div>
-                  <div className="login-bars" aria-hidden="true">
-                    {[32, 48, 24, 62, 42, 86, 58, 76, 30, 40].map((height, index) => (
-                      <div className="login-bar-pair" key={index}>
-                        <span style={{ height: `${height}%` }} />
-                        <span style={{ height: `${Math.max(14, 92 - height)}%` }} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div className="login-money-flow" aria-label="재무 운영 순서">
+            <span>매출 유입</span>
+            <ArrowRight size={15} />
+            <span>비용 통제</span>
+            <ArrowRight size={15} />
+            <span>현금 확보</span>
+            <ArrowRight size={15} />
+            <span>자본 성장</span>
+            <span className="login-money-flow-up">
+              <TrendingUp size={15} />
+              +18%
+            </span>
+          </div>
+          <div className="login-money-orbit" aria-hidden="true">
+            <span>₩</span>
+            <ArrowUpRight size={26} />
           </div>
         </div>
 
