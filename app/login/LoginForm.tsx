@@ -42,11 +42,11 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-6 grid gap-4">
-      <label className="grid gap-2 text-sm font-bold text-slate-700">
+    <form onSubmit={handleSubmit} className="grid gap-4">
+      <label className="grid gap-2 text-sm font-black text-[#42526e]">
         아이디
         <input
-          className="field"
+          className="field min-h-[48px] rounded-2xl border-[#d8e1ee] bg-[#f8fbff] px-4 font-bold shadow-inner shadow-slate-100 focus:bg-white"
           type="text"
           value={loginId}
           onChange={(event) => setLoginId(event.target.value)}
@@ -56,10 +56,10 @@ export function LoginForm() {
           required
         />
       </label>
-      <label className="grid gap-2 text-sm font-bold text-slate-700">
+      <label className="grid gap-2 text-sm font-black text-[#42526e]">
         비밀번호
         <input
-          className="field"
+          className="field min-h-[48px] rounded-2xl border-[#d8e1ee] bg-[#f8fbff] px-4 font-bold shadow-inner shadow-slate-100 focus:bg-white"
           type="password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
@@ -67,7 +67,7 @@ export function LoginForm() {
           required
         />
       </label>
-      <button className="btn btn-primary w-full" type="submit" disabled={isLoading}>
+      <button className="mt-1 min-h-[48px] w-full rounded-2xl border border-[#2f5f9e] bg-[linear-gradient(135deg,#2f5f9e_0%,#264f87_100%)] px-4 text-sm font-black text-white shadow-[0_16px_34px_rgba(47,95,158,.24)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(47,95,158,.28)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60" type="submit" disabled={isLoading}>
         {isLoading ? "로그인 중..." : "로그인"}
       </button>
       {error ? <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-sm font-bold text-red-700">{error}</div> : null}
