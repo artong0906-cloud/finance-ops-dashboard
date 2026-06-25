@@ -45,7 +45,7 @@ export default async function BankPage() {
         <SummaryBox caption={`월초 대비 ${signedKRW(netCashFlow)}`} label="월말잔액" tone="teal" value={formatKRW(totalBalance)} />
       </section>
 
-      <section className="mb-6 grid items-start grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
+      <section className="mb-6 grid items-start grid-cols-[minmax(0,1.25fr)_minmax(280px,.85fr)_minmax(0,1fr)] gap-4 max-xl:grid-cols-1">
         <div className="card self-start">
           <div className="mb-4 flex items-start justify-between gap-4 max-md:flex-col">
             <div>
@@ -68,16 +68,18 @@ export default async function BankPage() {
           </div>
         </div>
 
-        <aside className="grid min-w-0 gap-4 overflow-hidden">
-          <DonutPanel segments={accountSegments} title="계좌 잔고 비중" totalLabel="총 잔고" totalValue={formatCompactKRW(totalBalance)} />
-          <div className="card">
-            <div className="mb-3 flex items-center justify-between gap-3">
+        <DonutPanel segments={accountSegments} title="계좌 잔고 비중" totalLabel="총 잔고" totalValue={formatCompactKRW(totalBalance)} />
+
+        <div className="card min-w-0 overflow-hidden">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
               <h3 className="text-sm font-black text-slate-950">입출금 흐름</h3>
-              <span className="badge badge-muted">{bankRows.length.toLocaleString("ko-KR")}건</span>
+              <p className="mt-1 text-xs font-bold leading-5 text-slate-500">은행 거래 기준 월 입금과 출금 규모입니다.</p>
             </div>
-            <StackedBar segments={flowSegments} />
+            <span className="badge badge-muted">{bankRows.length.toLocaleString("ko-KR")}건</span>
           </div>
-        </aside>
+          <StackedBar segments={flowSegments} />
+        </div>
       </section>
 
       <section className="card">

@@ -46,7 +46,7 @@ export default async function CardsPage() {
         <SummaryBox caption="5월 임시 귀속" label="집계 기준" tone="teal" value="광고사업부" />
       </section>
 
-      <section className="mb-6 grid items-start grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
+      <section className="mb-6 grid items-start grid-cols-[minmax(0,1.25fr)_minmax(280px,.85fr)_minmax(0,1fr)] gap-4 max-xl:grid-cols-1">
         <div className="card self-start">
           <div className="mb-4 flex items-start justify-between gap-4 max-md:flex-col">
             <div>
@@ -69,27 +69,29 @@ export default async function CardsPage() {
           </div>
         </div>
 
-        <aside className="grid min-w-0 gap-4 overflow-hidden">
-          <DonutPanel segments={categorySegments} title="카드 사용 비중" totalLabel="총 사용" totalValue={formatCompactKRW(total)} />
-          <div className="card min-w-0 overflow-hidden">
-            <div className="mb-3 flex items-center justify-between gap-3">
+        <DonutPanel segments={categorySegments} title="카드 사용 비중" totalLabel="총 사용" totalValue={formatCompactKRW(total)} />
+
+        <div className="card min-w-0 overflow-hidden">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
               <h3 className="text-sm font-black text-slate-950">카드사/사용자 상위</h3>
-              <span className="badge badge-muted">{userGrouped.length.toLocaleString("ko-KR")}개</span>
+              <p className="mt-1 text-xs font-bold leading-5 text-slate-500">카드사 또는 사용자 기준 상위 사용액입니다.</p>
             </div>
-            <div className="grid gap-2">
-              {userGrouped.map((item, index) => (
-                <RankBar
-                  amount={item.amount}
-                  color={chartColors[index % chartColors.length]}
-                  count={item.count}
-                  key={item.label}
-                  label={item.label}
-                  total={total}
-                />
-              ))}
-            </div>
+            <span className="badge badge-muted">{userGrouped.length.toLocaleString("ko-KR")}개</span>
           </div>
-        </aside>
+          <div className="grid gap-2">
+            {userGrouped.map((item, index) => (
+              <RankBar
+                amount={item.amount}
+                color={chartColors[index % chartColors.length]}
+                count={item.count}
+                key={item.label}
+                label={item.label}
+                total={total}
+              />
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="card mb-6">
