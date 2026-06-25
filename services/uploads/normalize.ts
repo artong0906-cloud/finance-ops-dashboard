@@ -1,16 +1,36 @@
+import { classifyFirstPass, type BusinessUnitValue, type ExpenseBasisValue } from "@/services/classification/firstPass";
+
 export type UploadType = "bank" | "card" | "pharos" | "balance";
 
 export type NormalizedTransaction = {
   transaction_date: string;
   source: "은행" | "카드" | "파로스" | "수기입력";
-  business_unit: "광고사업부" | "플랫폼" | "대외협력" | "공통사용분" | "미배분";
+  business_unit: BusinessUnitValue;
+  account_id?: string | null;
+  card_budget_group?: string | null;
   vendor: string | null;
   description: string | null;
   amount: number;
   cash_flow_type: "입금" | "출금" | "내부이체" | "제외";
   main_category: string | null;
   sub_category: string | null;
+  detail_category?: string | null;
+  talent_investment_type?: string | null;
+  expense_basis?: ExpenseBasisValue | null;
+  is_internal_transfer?: boolean;
+  is_common_use?: boolean;
+  common_policy?: string | null;
   review_status: "정상" | "확인필요" | "보류" | "확정";
+  memo: string | null;
+};
+
+export type NormalizedBalanceMovement = {
+  month: string;
+  statement_type: "자산" | "부채";
+  category: string;
+  opening_amount: number;
+  increase_amount: number;
+  decrease_amount: number;
   memo: string | null;
 };
 
@@ -21,15 +41,24 @@ export type NormalizedUploadRow = {
   parseStatus: "정상" | "확인필요" | "오류";
   memo: string | null;
   transaction: NormalizedTransaction | null;
+  balanceMovement: NormalizedBalanceMovement | null;
 };
 
 const dateKeys = ["거래일자", "거래일시", "거래일", "거래일자(년월일)", "승인일자", "이용일자", "사용일자", "전표일자", "일자", "날짜", "date"];
+const monthKeys = ["월", "기준월", "집계월", "마감월", "month", "기간"];
+const statementTypeKeys = ["구분", "재무구분", "자산부채구분", "statement_type"];
+const balanceCategoryKeys = ["항목", "계정", "계정과목", "분류", "자산항목", "부채항목", "category"];
+const openingAmountKeys = ["기초", "기초금액", "전월말", "전월잔액", "opening_amount"];
+const increaseAmountKeys = ["증가", "증가금액", "당월증가", "차변", "increase_amount"];
+const decreaseAmountKeys = ["감소", "감소금액", "당월감소", "대변", "decrease_amount"];
+const balanceMemoKeys = ["메모", "비고", "상세", "세부항목", "적요", "memo"];
 const vendorKeys = ["거래처", "가맹점명", "사용처", "상호", "업체명", "거래상대방", "받는분", "보내는분", "예금주", "상대계좌예금주명", "상대예금주명", "vendor"];
 const descriptionKeys = ["적요", "거래내용", "기재내용", "내용", "내역", "거래구분", "거래명", "비고", "품목", "메모", "입금의뢰인", "출금계좌인자내용", "description"];
 const amountKeys = ["금액", "거래금액", "거래 금액", "승인금액", "이용금액", "사용금액", "합계", "amount"];
 const incomeKeys = ["입금", "입금액", "입금금액", "입금 금액", "수입", "대변"];
 const outcomeKeys = ["출금", "출금액", "출금금액", "출금 금액", "지출", "차변"];
 const businessUnitKeys = ["사업부", "사업단위", "귀속사업부", "부서", "business_unit"];
+const cardBudgetGroupKeys = ["카드사", "카드회사", "카드명", "카드구분", "카드사/사용자", "card_budget_group"];
 const mainCategoryKeys = ["대분류", "분류", "계정과목", "계정", "main_category"];
 const subCategoryKeys = ["중분류", "소분류", "세부분류", "sub_category"];
 
@@ -96,6 +125,34 @@ function normalizeDate(value: string) {
   return "";
 }
 
+function normalizeMonth(value: string) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const match = raw.match(/(20\d{2}|19\d{2})[.\-/년\s]*(\d{1,2})/);
+  if (match) {
+    const [, y, m] = match;
+    return `${y}-${m.padStart(2, "0")}`;
+  }
+
+  const date = normalizeDate(raw);
+  return date ? date.slice(0, 7) : "";
+}
+
+function normalizeStatementType(value: string) {
+  const raw = String(value || "").trim();
+  if (raw.includes("부채")) return "부채" as const;
+  if (raw.includes("자산")) return "자산" as const;
+  return null;
+}
+
+function normalizeBalanceCategory(value: string) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/토지|비품|차량|건물|시설|전자칠판|나스|장비|집기/.test(raw)) return raw.replace(/무형자산/g, "유형자산");
+  return raw;
+}
+
 function normalizeBusinessUnit(value: string): NormalizedTransaction["business_unit"] {
   if (value.includes("플랫폼")) return "플랫폼";
   if (value.includes("대외")) return "대외협력";
@@ -138,13 +195,73 @@ function inferMemo(missing: string[]) {
   return `자동 인식 필요: ${missing.join(", ")}`;
 }
 
+function normalizeBalanceRow(row: Record<string, string>) {
+  const month = normalizeMonth(pick(row, monthKeys) || pick(row, dateKeys));
+  const statementType = normalizeStatementType(pick(row, statementTypeKeys));
+  const category = normalizeBalanceCategory(pick(row, balanceCategoryKeys));
+  const openingAmount = parseAmount(pick(row, openingAmountKeys));
+  const increaseAmount = parseAmount(pick(row, increaseAmountKeys));
+  const decreaseAmount = parseAmount(pick(row, decreaseAmountKeys));
+  const memo = pick(row, balanceMemoKeys) || null;
+
+  const missing: string[] = [];
+  if (!hasLikelyTransactionSignal(row)) missing.push("거래행 아님");
+  if (!month) missing.push("기준월");
+  if (!statementType) missing.push("자산/부채 구분");
+  if (!category) missing.push("항목");
+
+  const parseStatus: NormalizedUploadRow["parseStatus"] = missing.length === 0 ? "정상" : "확인필요";
+  const baseMemo = inferMemo(missing);
+  const finalMemo = [memo, baseMemo].filter(Boolean).join(" / ") || null;
+
+  return {
+    parseStatus,
+    memo: finalMemo,
+    balanceMovement: month && statementType && category
+      ? {
+          month,
+          statement_type: statementType,
+          category,
+          opening_amount: openingAmount,
+          increase_amount: increaseAmount,
+          decrease_amount: decreaseAmount,
+          memo: finalMemo
+        }
+      : null,
+    normalizedData: {
+      month,
+      statement_type: statementType,
+      category,
+      opening_amount: openingAmount,
+      increase_amount: increaseAmount,
+      decrease_amount: decreaseAmount,
+      memo: finalMemo
+    }
+  };
+}
+
 export function normalizeUploadRows(uploadType: UploadType, rows: Record<string, string>[]): NormalizedUploadRow[] {
   return rows.map((row, index) => {
+    if (uploadType === "balance") {
+      const normalized = normalizeBalanceRow(row);
+
+      return {
+        rowIndex: index + 1,
+        rawData: row,
+        normalizedData: normalized.normalizedData,
+        parseStatus: normalized.parseStatus,
+        memo: normalized.memo,
+        transaction: null,
+        balanceMovement: normalized.balanceMovement
+      };
+    }
+
     const transactionDate = normalizeDate(pick(row, dateKeys));
     const vendor = pick(row, vendorKeys) || null;
     const description = pick(row, descriptionKeys) || vendor || null;
     const { amount, cashFlowType } = getAmountAndFlow(row, uploadType);
     const businessUnit = normalizeBusinessUnit(pick(row, businessUnitKeys));
+    const cardBudgetGroup = uploadType === "card" ? pick(row, cardBudgetGroupKeys) || null : null;
     const mainCategory = pick(row, mainCategoryKeys) || null;
     const subCategory = pick(row, subCategoryKeys) || null;
 
@@ -155,20 +272,44 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
     if (!description) missing.push("적요/거래처");
 
     const parseStatus = missing.length === 0 ? "정상" : "확인필요";
+    const baseMemo = inferMemo(missing);
+    const source = sourceByType(uploadType);
+    const firstPass = classifyFirstPass({
+      source,
+      businessUnit,
+      cardBudgetGroup,
+      vendor,
+      description,
+      amount,
+      cashFlowType,
+      mainCategory,
+      subCategory,
+      memo: baseMemo
+    });
+    const autoMemo = `1차분류: ${firstPass.matchedRule}`;
+    const memo = [baseMemo, autoMemo].filter(Boolean).join(" / ") || null;
 
     const transaction = transactionDate && amount
       ? {
           transaction_date: transactionDate,
-          source: sourceByType(uploadType),
-          business_unit: businessUnit,
+          source,
+          business_unit: firstPass.businessUnit,
+          account_id: firstPass.accountId || null,
+          card_budget_group: cardBudgetGroup,
           vendor,
           description,
           amount,
           cash_flow_type: cashFlowType,
-          main_category: mainCategory,
-          sub_category: subCategory,
-          review_status: parseStatus === "정상" ? ("확인필요" as const) : ("확인필요" as const),
-          memo: inferMemo(missing)
+          main_category: firstPass.mainCategory,
+          sub_category: firstPass.subCategory,
+          detail_category: firstPass.detailCategory,
+          talent_investment_type: firstPass.talentInvestmentType || null,
+          expense_basis: firstPass.expenseBasis,
+          is_internal_transfer: firstPass.isInternalTransfer,
+          is_common_use: firstPass.isCommonUse,
+          common_policy: firstPass.commonPolicy || null,
+          review_status: parseStatus === "정상" ? firstPass.reviewStatus : ("확인필요" as const),
+          memo
         }
       : null;
 
@@ -177,17 +318,24 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
       rawData: row,
       normalizedData: {
         transaction_date: transactionDate,
+        card_budget_group: cardBudgetGroup,
         vendor,
         description,
         amount,
         cash_flow_type: cashFlowType,
-        business_unit: businessUnit,
-        main_category: mainCategory,
-        sub_category: subCategory
+        business_unit: firstPass.businessUnit,
+        main_category: firstPass.mainCategory,
+        sub_category: firstPass.subCategory,
+        detail_category: firstPass.detailCategory,
+        talent_investment_type: firstPass.talentInvestmentType || null,
+        expense_basis: firstPass.expenseBasis,
+        review_status: firstPass.reviewStatus,
+        matched_rule: firstPass.matchedRule
       },
       parseStatus,
-      memo: inferMemo(missing),
-      transaction
+      memo,
+      transaction,
+      balanceMovement: null
     };
   });
 }

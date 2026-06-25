@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { loginIdToInternalEmail } from "@/lib/auth/internal-email";
 
 export function LoginForm() {
   const router = useRouter();
@@ -19,25 +17,22 @@ export function LoginForm() {
     setIsLoading(true);
 
     try {
-      const supabase = createClient();
-      const email = loginIdToInternalEmail(loginId);
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password
+      const next = searchParams.get("next") || "/dashboard";
+      const response = await fetch("/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ loginId, password, next })
       });
 
-      if (signInError) {
-        throw new Error("아이디 또는 비밀번호가 맞지 않습니다.");
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(String(result.error || "아이디 또는 비밀번호가 맞지 않습니다."));
       }
 
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !sessionData.session) {
-        throw new Error("로그인 세션을 저장하지 못했습니다. 브라우저 새로고침 후 다시 시도해주세요.");
-      }
-
-      const next = searchParams.get("next") || "/dashboard";
       router.refresh();
-      window.location.assign(next);
+      window.location.replace(String(result.next || next));
     } catch (err) {
       const message = err instanceof Error ? err.message : "로그인 중 오류가 발생했습니다.";
       setError(message);
@@ -47,11 +42,11 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-6 grid gap-4">
-      <label className="grid gap-2 text-sm font-bold text-slate-700">
+    <form onSubmit={handleSubmit} className="grid gap-4">
+      <label className="grid gap-2 text-sm font-black text-[#42526e]">
         아이디
         <input
-          className="rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-blue-500"
+          className="field min-h-[48px] rounded-2xl border-[#d8e1ee] bg-[#f8fbff] px-4 font-bold shadow-inner shadow-slate-100 focus:bg-white"
           type="text"
           value={loginId}
           onChange={(event) => setLoginId(event.target.value)}
@@ -61,10 +56,10 @@ export function LoginForm() {
           required
         />
       </label>
-      <label className="grid gap-2 text-sm font-bold text-slate-700">
+      <label className="grid gap-2 text-sm font-black text-[#42526e]">
         비밀번호
         <input
-          className="rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-blue-500"
+          className="field min-h-[48px] rounded-2xl border-[#d8e1ee] bg-[#f8fbff] px-4 font-bold shadow-inner shadow-slate-100 focus:bg-white"
           type="password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
@@ -72,10 +67,10 @@ export function LoginForm() {
           required
         />
       </label>
-      <button className="btn btn-primary w-full" type="submit" disabled={isLoading}>
+      <button className="mt-1 min-h-[48px] w-full rounded-2xl border border-[#2f5f9e] bg-[linear-gradient(135deg,#2f5f9e_0%,#264f87_100%)] px-4 text-sm font-black text-white shadow-[0_16px_34px_rgba(47,95,158,.24)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(47,95,158,.28)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60" type="submit" disabled={isLoading}>
         {isLoading ? "로그인 중..." : "로그인"}
       </button>
-      {error ? <div className="rounded-2xl bg-red-50 border border-red-200 p-4 text-sm font-bold text-red-700">{error}</div> : null}
+      {error ? <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-sm font-bold text-red-700">{error}</div> : null}
     </form>
   );
 }

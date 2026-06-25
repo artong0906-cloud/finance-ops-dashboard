@@ -1,8 +1,9 @@
-export type BusinessUnit = "광고사업부" | "플랫폼" | "대외협력" | "공통사용분" | "미배분";
-export type TransactionSource = "은행" | "카드" | "파로스" | "수기입력";
-export type CashFlowType = "입금" | "출금" | "내부이체" | "제외";
-export type ExpenseBasis = "비용성" | "자산성" | "해당없음";
-export type JournalStatus = "미분개" | "분개완료" | "확인필요";
+export type BusinessUnit = string;
+export type TransactionSource = string;
+export type CashFlowType = string;
+export type ExpenseBasis = string;
+export type JournalStatus = string;
+export type ReviewStatus = string;
 
 export type Transaction = {
   id: string;
@@ -12,6 +13,7 @@ export type Transaction = {
   accountName?: string;
   accountId?: string;
   cardBudgetGroup?: string;
+  cardIssuer?: string;
   vendor: string;
   description: string;
   amount: number;
@@ -27,7 +29,7 @@ export type Transaction = {
   journalStatus?: JournalStatus;
   journalBusinessUnit?: BusinessUnit;
   memo?: string;
-  reviewStatus: "정상" | "확인필요" | "보류" | "확정";
+  reviewStatus: ReviewStatus;
 };
 
 export type BankAccount = {
@@ -49,5 +51,7 @@ export type BalanceMovement = {
   openingAmount: number;
   increaseAmount: number;
   decreaseAmount: number;
+  acquiredAt?: string;
+  monthlyDepreciation?: number;
   memo?: string;
 };
