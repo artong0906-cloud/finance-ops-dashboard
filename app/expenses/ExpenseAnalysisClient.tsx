@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
-import { chartColors, DonutPanel } from "@/components/shared/FinanceViz";
+import { chartColors, RankBar } from "@/components/shared/FinanceViz";
 import { formatKRW } from "@/services/dashboard/calculations";
 import type { Transaction } from "@/types/finance";
 
@@ -395,13 +395,6 @@ export function ExpenseAnalysisClient({
   const talentSummaries = useMemo(() => buildSummaries(talentLabels, resolvedRows.filter((item) => item.category === "인재투자"), (item) => item.talentType), [resolvedRows]);
   const operatingSummaries = useMemo(() => buildSummaries(operatingLabels, resolvedRows.filter((item) => item.category === "운영비"), (item) => item.operatingType), [resolvedRows]);
   const totalExpense = useMemo(() => sumResolvedAmount(resolvedRows), [resolvedRows]);
-  const expenseSegments = useMemo(() => categorySummaries
-    .filter((summary) => summary.amount > 0)
-    .map((summary, index) => ({
-      label: summary.label,
-      amount: summary.amount,
-      color: chartColors[index % chartColors.length]
-    })), [categorySummaries]);
 
   function applyFilters({
     category = activeCategory,
@@ -449,8 +442,8 @@ export function ExpenseAnalysisClient({
 
   return (
     <>
-      <section className="mb-6 grid items-start grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
-        <div className="grid self-start auto-rows-max grid-cols-7 gap-2.5 max-2xl:grid-cols-4 max-lg:grid-cols-2 max-md:grid-cols-1">
+      <section className="mb-6 grid gap-4">
+        <div className="grid auto-rows-max grid-cols-[repeat(7,minmax(0,1fr))] gap-2.5 max-2xl:grid-cols-4 max-lg:grid-cols-2 max-md:grid-cols-1">
           {categorySummaries.map((summary, index) => {
             const selected = activeCategory === summary.label;
             const color = chartColors[index % chartColors.length];
@@ -484,46 +477,56 @@ export function ExpenseAnalysisClient({
           })}
         </div>
 
-        <aside className="grid min-w-0 gap-4 overflow-hidden">
-          <DonutPanel
-            segments={expenseSegments}
-            title="지출 비중"
-            totalLabel="총 지출"
-            totalValue={formatKRW(totalExpense)}
-          />
-          <div className="card flex flex-col justify-between gap-4">
+        <div className="card">
+          <div className="mb-4 flex items-start justify-between gap-4 max-lg:flex-col">
             <div>
-              <div className="eyebrow">현재 상세 필터</div>
-              <div className="mt-2 text-2xl font-black text-slate-950">{activeCategory}</div>
-              <p className="mt-3 text-sm leading-6 text-slate-600">
-                {activeCategory === "인재투자"
-                  ? `하위유형: ${activeTalent}`
-                  : activeCategory === "운영비"
-                    ? `보조유형: ${activeOperating}`
-                    : "대카테고리 기준으로 표시 중입니다."}
-                {canFilterByCardUser ? (
-                  <>
-                    <br />
-                    카드사/사용자: {activeCardUser}
-                  </>
-                ) : null}
-              </p>
+              <h2 className="section-title">지출 비중</h2>
+              <p className="mt-1 text-sm text-slate-500">유형별 지출 규모와 건수를 가로 막대 기준으로 비교합니다.</p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <div className="text-xs font-black text-slate-500">표시 금액</div>
-                <div className="mt-2 font-black text-slate-950">{formatKRW(filteredTotal)}</div>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <div className="text-xs font-black text-slate-500">표시 건수</div>
-                <div className="mt-2 font-black text-slate-950">{filteredRows.length.toLocaleString("ko-KR")}건</div>
-              </div>
+            <div className="flex flex-wrap items-center justify-end gap-2 max-lg:justify-start">
+              <span className="badge">{activeCategory}</span>
+              <span className="badge badge-muted">{formatKRW(filteredTotal)}</span>
+              <span className="badge badge-muted">{filteredRows.length.toLocaleString("ko-KR")}건</span>
+              <button className="btn btn-sm" onClick={() => applyFilters({ category: allCategoryFilter })} type="button">
+                전체 지출 보기
+              </button>
             </div>
-            <button className="btn w-full" onClick={() => applyFilters({ category: allCategoryFilter })} type="button">
-              전체 지출 보기
-            </button>
           </div>
-        </aside>
+
+          <div className="grid grid-cols-[minmax(0,1fr)_280px] gap-4 max-xl:grid-cols-1">
+            <div className="grid gap-2.5">
+              {categorySummaries.map((summary, index) => (
+                <RankBar
+                  amount={summary.amount}
+                  color={chartColors[index % chartColors.length]}
+                  count={summary.count}
+                  key={summary.label}
+                  label={summary.label}
+                  total={totalExpense}
+                />
+              ))}
+            </div>
+            <div className="grid gap-3 self-start">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="eyebrow">총 지출</div>
+                <div className="mt-2 text-xl font-black text-slate-950">{formatKRW(totalExpense)}</div>
+                <div className="mt-1 text-xs text-slate-500">{resolvedRows.length.toLocaleString("ko-KR")}건 기준</div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="eyebrow">현재 상세 필터</div>
+                <div className="mt-2 text-base font-black text-slate-950">{activeCategory}</div>
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  {activeCategory === "인재투자"
+                    ? `하위유형: ${activeTalent}`
+                    : activeCategory === "운영비"
+                      ? `보조유형: ${activeOperating}`
+                      : "대카테고리 기준"}
+                  {canFilterByCardUser ? ` · 카드사/사용자: ${activeCardUser}` : ""}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
       {activeCategory === "인재투자" ? (
