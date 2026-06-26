@@ -126,6 +126,7 @@ export type RawRowSample = {
 export type DashboardData = {
   mode: "live" | "mock";
   currentMonth: string | null;
+  availableMonths: string[];
   transactions: Transaction[];
   bankAccounts: BankAccount[];
   balanceMovements: BalanceMovement[];
@@ -234,10 +235,23 @@ function consumeCardIssuer(row: DbTransaction, lookup?: Map<string, string[]>) {
 }
 
 function getLatestMonth(rows: DbTransaction[]) {
-  return rows
+  return getAvailableMonths(rows)[0] || null;
+}
+
+function getAvailableMonths(rows: DbTransaction[], balanceRows: DbBalanceMovement[] = []) {
+  return Array.from(new Set([
+    ...rows
     .map((row) => row.transaction_date?.slice(0, 7))
-    .filter((month): month is string => Boolean(month))
-    .sort((a, b) => b.localeCompare(a))[0] || null;
+      .filter((month): month is string => Boolean(month)),
+    ...balanceRows
+      .map((row) => row.month)
+      .filter((month): month is string => Boolean(month))
+  ])).sort((a, b) => b.localeCompare(a));
+}
+
+function pickCurrentMonth(requestedMonth: string | undefined, availableMonths: string[]) {
+  if (requestedMonth && availableMonths.includes(requestedMonth)) return requestedMonth;
+  return availableMonths[0] || requestedMonth || null;
 }
 
 function toUiExpenseBasis(value: string | null | undefined, cashFlowType: string) {
@@ -365,7 +379,50 @@ function balanceRowsForMonth(month: string | null, dbRows: DbBalanceMovement[]) 
   return (currentRows.length > 0 ? currentRows : dbRows).map(toBalanceMovement);
 }
 
-async function loadDashboardData(): Promise<DashboardData> {
+function rawRowMatchesMonth(row: DbRawUploadRow, month: string | null) {
+  if (!month) return true;
+
+  const normalizedData = toLookupRecord(row.normalized_data);
+  const rawData = toLookupRecord(row.raw_data);
+  const values = [
+    normalizedData.transaction_date,
+    normalizedData.date,
+    normalizedData.month,
+    rawData.transaction_date,
+    rawData.date,
+    rawData.month,
+    readRecordValue(rawData, ["거래일자", "일자", "날짜", "기준월", "월", "month", "date"])
+  ].filter(Boolean).map(String);
+
+  return values.some((value) => value.startsWith(month) || value.slice(0, 7) === month);
+}
+
+async function fetchRawRowsForMonth(admin: ReturnType<typeof createAdminClient>, month: string | null) {
+  const pageSize = 1000;
+  const matched: (DbRawUploadRow & { id?: string; parse_status?: string | null; memo?: string | null; created_at?: string | null })[] = [];
+
+  for (let from = 0; from < 10000; from += pageSize) {
+    const to = from + pageSize - 1;
+    const { data, error } = await admin
+      .from("upload_raw_rows")
+      .select("id,upload_batch_id,row_index,raw_data,normalized_data,parse_status,memo,created_at")
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    if (error) break;
+
+    const page = (data || []) as (DbRawUploadRow & { id?: string; parse_status?: string | null; memo?: string | null; created_at?: string | null })[];
+    matched.push(...page.filter((row) => rawRowMatchesMonth(row, month)));
+    if (page.length < pageSize) break;
+  }
+
+  return {
+    rows: matched.slice(0, 12),
+    count: matched.length
+  };
+}
+
+async function loadDashboardData(requestedMonth?: string, includeRawRows = false): Promise<DashboardData> {
   try {
     const admin = createAdminClient();
     const [
@@ -373,7 +430,6 @@ async function loadDashboardData(): Promise<DashboardData> {
       bankResult,
       balanceResult,
       batchResult,
-      rawRowResult
     ] = await Promise.all([
       fetchAllTransactions(admin),
       admin
@@ -389,47 +445,49 @@ async function loadDashboardData(): Promise<DashboardData> {
         .from("upload_batches")
         .select("id,upload_type,file_name,status,uploaded_by,uploaded_at")
         .order("uploaded_at", { ascending: false })
-        .limit(10),
-      admin
-        .from("upload_raw_rows")
-        .select("id,row_index,raw_data,normalized_data,parse_status,memo,created_at")
-        .order("created_at", { ascending: false })
-        .limit(12)
+        .limit(10)
     ]);
 
     const dbTransactions = (transactionResult.data || []) as DbTransaction[];
+    const dbBalanceMovements = (balanceResult.data || []) as DbBalanceMovement[];
     if (transactionResult.error || dbTransactions.length === 0) {
+      const mockMonths = getAvailableMonths(mockTransactions.map((row) => ({
+        transaction_date: row.date
+      } as DbTransaction)), []);
+      const currentMonth = pickCurrentMonth(requestedMonth, mockMonths);
+
       return {
         mode: "mock",
-        currentMonth: null,
-        transactions: mockTransactions,
+        currentMonth,
+        availableMonths: mockMonths,
+        transactions: currentMonth ? mockTransactions.filter((row) => row.date.startsWith(currentMonth)) : mockTransactions,
         bankAccounts: mockBankAccounts,
-        balanceMovements: mayBalanceMovements,
+        balanceMovements: currentMonth === "2026-05" ? mayBalanceMovements : mayBalanceMovements,
         uploadBatches: [],
         rawRows: [],
         rawRowCount: 0
       };
     }
 
-    const currentMonth = getLatestMonth(dbTransactions);
+    const availableMonths = getAvailableMonths(dbTransactions, dbBalanceMovements);
+    const currentMonth = pickCurrentMonth(requestedMonth, availableMonths);
     const currentTransactions = currentMonth
       ? dbTransactions.filter((row) => row.transaction_date?.startsWith(currentMonth))
       : dbTransactions;
-    const dbBalanceMovements = (balanceResult.data || []) as DbBalanceMovement[];
     const transactionBatchIds = Array.from(new Set(
       currentTransactions
         .map((row) => row.upload_batch_id)
         .filter((id): id is string => Boolean(id))
     ));
     const cardIssuerLookup = buildCardIssuerLookup(await fetchAllRawRowsForBatches(admin, transactionBatchIds));
-
-    const countResult = await admin
-      .from("upload_raw_rows")
-      .select("id", { count: "exact", head: true });
+    const rawRowsForMonth = includeRawRows
+      ? await fetchRawRowsForMonth(admin, currentMonth)
+      : { rows: [], count: 0 };
 
     return {
       mode: "live",
       currentMonth,
+      availableMonths,
       transactions: currentTransactions.map((row) => toTransaction(row, cardIssuerLookup)),
       bankAccounts: ((bankResult.data || []) as DbBankAccount[]).map(toBankAccount),
       balanceMovements: balanceRowsForMonth(currentMonth, dbBalanceMovements),
@@ -441,7 +499,7 @@ async function loadDashboardData(): Promise<DashboardData> {
         uploadedBy: row.uploaded_by || null,
         uploadedAt: String(row.uploaded_at || "")
       })),
-      rawRows: ((rawRowResult.data || []) as Record<string, unknown>[]).map((row) => ({
+      rawRows: rawRowsForMonth.rows.map((row) => ({
         id: String(row.id),
         rowIndex: Number(row.row_index || 0),
         rawData: (row.raw_data || {}) as Record<string, unknown>,
@@ -449,13 +507,19 @@ async function loadDashboardData(): Promise<DashboardData> {
         parseStatus: String(row.parse_status || ""),
         memo: row.memo ? String(row.memo) : null
       })),
-      rawRowCount: countResult.count || 0
+      rawRowCount: rawRowsForMonth.count
     };
   } catch {
+    const mockMonths = getAvailableMonths(mockTransactions.map((row) => ({
+      transaction_date: row.date
+    } as DbTransaction)), []);
+    const currentMonth = pickCurrentMonth(requestedMonth, mockMonths);
+
     return {
       mode: "mock",
-      currentMonth: null,
-      transactions: mockTransactions,
+      currentMonth,
+      availableMonths: mockMonths,
+      transactions: currentMonth ? mockTransactions.filter((row) => row.date.startsWith(currentMonth)) : mockTransactions,
       bankAccounts: mockBankAccounts,
       balanceMovements: mayBalanceMovements,
       uploadBatches: [],
@@ -465,7 +529,7 @@ async function loadDashboardData(): Promise<DashboardData> {
   }
 }
 
-export const getDashboardData = unstable_cache(loadDashboardData, ["finance-dashboard-data-v1"], {
+export const getDashboardData = unstable_cache(loadDashboardData, ["finance-dashboard-data-v2"], {
   revalidate: 15,
   tags: ["dashboard-data"]
 });

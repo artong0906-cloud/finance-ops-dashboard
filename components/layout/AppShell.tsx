@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { getAllowedUser } from "@/lib/auth/session";
+import { withMonthParam } from "@/lib/month-filter";
 
 const nav: { href: string; label: string; kicker: string; icon: LucideIcon }[] = [
   { href: "/dashboard", label: "경영현황", kicker: "Overview", icon: Gauge },
@@ -29,16 +30,21 @@ export async function AppShell({
   title,
   description,
   periodLabel = "2026-05",
+  availableMonths = [],
   activePath,
   children
 }: {
   title: string;
   description?: string;
   periodLabel?: string;
+  availableMonths?: string[];
   activePath?: string;
   children: React.ReactNode;
 }) {
   const { profile } = await getAllowedUser();
+  const monthOptions = availableMonths.length > 0 ? availableMonths : [periodLabel];
+  const monthPath = activePath || "/dashboard";
+  const navHref = (href: string) => withMonthParam(href, periodLabel);
   const displayName = profile.name || profile.login_id || profile.email || "사용자";
 
   return (
@@ -46,7 +52,7 @@ export async function AppShell({
       <aside className="border-r border-[#d8e0ec] bg-[linear-gradient(180deg,#f8fbff_0%,#eef4fb_50%,#f7f9fc_100%)] lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto max-lg:border-r-0 max-lg:border-b">
         <div className="flex h-full flex-col p-3">
           <a
-            href="/dashboard"
+            href={navHref("/dashboard")}
             className="group flex items-center gap-3 rounded-xl border border-white/80 bg-white/85 px-3 py-3 shadow-[0_12px_28px_rgba(47,95,158,.08)] transition hover:-translate-y-0.5 hover:border-[#c8d7ee] hover:bg-white"
           >
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#f1f5ff] ring-1 ring-[#d7e3ff] transition group-hover:ring-[#b9ccf4]">
@@ -80,7 +86,7 @@ export async function AppShell({
               return (
                 <a
                   key={item.href}
-                  href={item.href}
+                  href={navHref(item.href)}
                   className={`group relative flex min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition max-lg:min-w-[150px] ${
                     active
                       ? "bg-[#2f5f9e] text-white shadow-[0_12px_24px_rgba(47,95,158,.18)]"
@@ -144,7 +150,23 @@ export async function AppShell({
                 <span className="h-2 w-2 rounded-full bg-emerald-500" />
                 운영
               </div>
-              <a className="btn btn-soft" href="/dashboard">
+              <form action={monthPath} className="surface flex min-h-[38px] items-center gap-2 px-2" method="get">
+                <label className="sr-only" htmlFor="month-filter">기준월</label>
+                <select
+                  className="min-h-[30px] rounded-md border border-[#d8e0ec] bg-white px-2 text-xs font-black text-[#13233b] outline-none"
+                  defaultValue={periodLabel}
+                  id="month-filter"
+                  name="month"
+                >
+                  {monthOptions.map((month) => (
+                    <option key={month} value={month}>{month}</option>
+                  ))}
+                </select>
+                <button className="rounded-md bg-[#2f5f9e] px-2.5 py-1.5 text-xs font-black text-white" type="submit">
+                  월별 보기
+                </button>
+              </form>
+              <a className="btn btn-soft" href={navHref("/dashboard")}>
                 실데이터 보기
               </a>
               <a href="/auth/logout" className="btn lg:hidden">

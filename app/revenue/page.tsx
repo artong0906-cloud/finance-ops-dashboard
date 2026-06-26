@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { chartColors, DonutPanel, RankBar } from "@/components/shared/FinanceViz";
+import { resolveMonthParam, withMonthParam, type MonthSearchParams } from "@/lib/month-filter";
 import { formatCompactKRW, formatKRW } from "@/services/dashboard/calculations";
 import { getDashboardData } from "@/services/dashboard/liveData";
 import type { Transaction } from "@/types/finance";
@@ -43,7 +44,7 @@ type RevenueRow = {
 };
 
 type RevenuePageProps = {
-  searchParams?: Promise<{
+  searchParams?: Promise<MonthSearchParams & {
     category?: string | string[];
   }>;
 };
@@ -123,9 +124,11 @@ function resolveFilter(value: string | undefined): RevenueFilter {
   return allFilter;
 }
 
-function filterHref(category: RevenueFilter) {
-  if (category === allFilter) return "/revenue";
-  return `/revenue?category=${encodeURIComponent(category)}#revenue-detail`;
+function filterHref(category: RevenueFilter, month?: string | null) {
+  const params = new URLSearchParams();
+  if (category !== allFilter) params.set("category", category);
+  const query = params.toString();
+  return withMonthParam(`/revenue${query ? `?${query}` : ""}#revenue-detail`, month);
 }
 
 function percent(part: number, total: number) {
@@ -143,7 +146,9 @@ function ruleCaption(category: RevenueCategory) {
 export default async function RevenuePage({ searchParams }: RevenuePageProps) {
   const params = searchParams ? await searchParams : {};
   const activeFilter = resolveFilter(Array.isArray(params.category) ? params.category[0] : params.category);
-  const data = await getDashboardData();
+  const selectedMonth = resolveMonthParam(params);
+  const data = await getDashboardData(selectedMonth);
+  const currentMonth = data.currentMonth || "2026-05";
   const bankDepositRows = data.transactions.filter((row) => (
     row.source === "은행"
     && row.cashFlowType === "입금"
@@ -182,7 +187,8 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
     <AppShell
       title="매출 분석"
       description="5월 통장 입금내역을 기준으로 매출을 광고사업부, 대외협력부, 플랫폼, 정부지원금, 기타매출로 시뮬레이션합니다."
-      periodLabel={data.currentMonth || "2026-05"}
+      periodLabel={currentMonth}
+      availableMonths={data.availableMonths}
       activePath="/revenue"
     >
       <section className="mb-6 grid items-start grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
@@ -192,7 +198,7 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
               <h2 className="section-title">매출 카테고리</h2>
               <p className="mt-1 text-sm text-slate-500">카드를 클릭하면 하단 상세가 해당 매출구분으로 필터링됩니다.</p>
             </div>
-            <a className="btn btn-sm" href={filterHref(allFilter)}>전체 보기</a>
+            <a className="btn btn-sm" href={filterHref(allFilter, currentMonth)}>전체 보기</a>
           </div>
           <div className="grid grid-cols-5 gap-3 max-2xl:grid-cols-3 max-xl:grid-cols-2 max-md:grid-cols-1">
             {summaries.map((summary, index) => {
@@ -206,7 +212,7 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
                     "rounded-lg border border-white/10 p-4 text-left text-white transition",
                     selected ? "ring-2 ring-blue-100" : "hover:-translate-y-0.5 hover:ring-1 hover:ring-white/25"
                   ].join(" ")}
-                  href={filterHref(summary.category)}
+                  href={filterHref(summary.category, currentMonth)}
                   key={summary.category}
                   style={{ background: cardStyle.bg, boxShadow: selected ? cardStyle.shadow : undefined }}
                 >
@@ -266,7 +272,7 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
                 <div className="mt-2 font-black text-slate-950">{filteredRows.length.toLocaleString("ko-KR")}건</div>
               </div>
             </div>
-            <a className="btn w-full" href={filterHref(allFilter)}>
+            <a className="btn w-full" href={filterHref(allFilter, currentMonth)}>
               전체 매출 보기
             </a>
           </div>
