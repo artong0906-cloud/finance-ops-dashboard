@@ -1,12 +1,19 @@
 export const dynamic = "force-dynamic";
 
 import { AppShell } from "@/components/layout/AppShell";
+import { resolveMonthParam, type MonthSearchParams } from "@/lib/month-filter";
 import { chartColors, RankBar, SummaryBox } from "@/components/shared/FinanceViz";
 import { formatCompactKRW, formatKRW, sumBy } from "@/services/dashboard/calculations";
 import { getDashboardData } from "@/services/dashboard/liveData";
 
-export default async function CardsPage() {
-  const data = await getDashboardData();
+export default async function CardsPage({
+  searchParams
+}: {
+  searchParams?: Promise<MonthSearchParams>;
+}) {
+  const params = searchParams ? await searchParams : {};
+  const selectedMonth = resolveMonthParam(params);
+  const data = await getDashboardData(selectedMonth);
   const { transactions } = data;
   const cardRows = transactions.filter((row) => row.source === "카드");
   const total = sumBy(cardRows, (row) => row.amount);
@@ -33,7 +40,7 @@ export default async function CardsPage() {
   const reviewCount = cardRows.filter((row) => row.reviewStatus === "확인필요").length;
 
   return (
-    <AppShell title="카드 사용내역" description="업로드된 5월 카드 로우데이터를 기준으로 사용액과 분류 결과를 확인합니다." periodLabel={data.currentMonth || "2026-05"} activePath="/cards">
+    <AppShell title="카드 사용내역" description="선택한 월의 카드 로우데이터를 기준으로 사용액과 분류 결과를 확인합니다." periodLabel={data.currentMonth || "2026-05"} availableMonths={data.availableMonths} activePath="/cards">
       <section className="mb-5 grid grid-cols-4 gap-3 max-xl:grid-cols-2 max-md:grid-cols-1">
         <SummaryBox caption="매입신용카드 원본 기준" label="카드 거래" value={`${cardRows.length.toLocaleString("ko-KR")}건`} />
         <SummaryBox caption="카드 사용 총액" label="카드 사용액" tone="stone" value={formatKRW(total)} />

@@ -291,14 +291,17 @@ function expenseHref({
   category = allCategoryFilter,
   talent = allTalentFilter,
   operating = allOperatingFilter,
-  cardUser = allCardUserFilter
+  cardUser = allCardUserFilter,
+  month
 }: {
   category?: ExpenseCategory;
   talent?: TalentFilter;
   operating?: OperatingFilter;
   cardUser?: string;
+  month?: string;
 }) {
   const params = new URLSearchParams();
+  if (month) params.set("month", month);
   if (category !== allCategoryFilter) params.set("category", category);
   if (category === "인재투자" && talent !== allTalentFilter) params.set("talent", talent);
   if (category === "운영비" && operating !== allOperatingFilter) params.set("operating", operating);
@@ -347,12 +350,14 @@ export function ExpenseAnalysisClient({
   activeTalent: activeTalentValue,
   activeOperating: activeOperatingValue,
   activeCardUser: activeCardUserValue,
+  activeMonth,
   expenseRows
 }: {
   activeCategory?: string;
   activeTalent?: string;
   activeOperating?: string;
   activeCardUser?: string;
+  activeMonth?: string;
   expenseRows: Transaction[];
 }) {
   const [selectedCategory, setSelectedCategory] = useState<ExpenseCategory>(() => resolveActiveCategory(activeCategoryValue, activeTalentValue));
@@ -429,7 +434,8 @@ export function ExpenseAnalysisClient({
         category,
         talent: nextTalent,
         operating: nextOperating,
-        cardUser: nextCardUser
+        cardUser: nextCardUser,
+        month: activeMonth
       }));
       if (scrollToDetail) {
         window.requestAnimationFrame(() => {

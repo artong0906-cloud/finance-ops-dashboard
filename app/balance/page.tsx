@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
 import { chartColors, DonutPanel, equityColor, FinancialCard, outflowColor, StackedBar } from "@/components/shared/FinanceViz";
+import { resolveMonthParam, type MonthSearchParams } from "@/lib/month-filter";
 import { endingAmount, formatCompactKRW, formatKRW, sumBy } from "@/services/dashboard/calculations";
 import { getDashboardData } from "@/services/dashboard/liveData";
 import type { BalanceMovement, BankAccount } from "@/types/finance";
@@ -299,8 +300,14 @@ function BalanceGroupSection({
   );
 }
 
-export default async function BalancePage() {
-  const data = await getDashboardData();
+export default async function BalancePage({
+  searchParams
+}: {
+  searchParams?: Promise<MonthSearchParams>;
+}) {
+  const params = searchParams ? await searchParams : {};
+  const selectedMonth = resolveMonthParam(params);
+  const data = await getDashboardData(selectedMonth);
   const { balanceMovements, bankAccounts } = data;
   const viewRows = toViewRows(balanceMovements);
   const assets = viewRows.filter((row) => row.statementType === "자산");
@@ -321,7 +328,7 @@ export default async function BalancePage() {
   ].filter((segment) => segment.amount > 0);
 
   return (
-    <AppShell title="자산/부채 현황" description="월별 업로드 증감표를 기준으로 자산·부채 항목별 상세를 확인합니다." periodLabel={data.currentMonth || "2026-05"} activePath="/balance">
+    <AppShell title="자산/부채 현황" description="월별 업로드 증감표를 기준으로 자산·부채 항목별 상세를 확인합니다." periodLabel={data.currentMonth || "2026-05"} availableMonths={data.availableMonths} activePath="/balance">
       <section className="card mb-6">
         <div className="mb-4 flex items-start justify-between gap-4 max-md:flex-col">
           <div>

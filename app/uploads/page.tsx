@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { AppShell } from "@/components/layout/AppShell";
 import { formatKRW } from "@/services/dashboard/calculations";
 import { getDashboardData } from "@/services/dashboard/liveData";
+import { resolveMonthParam, type MonthSearchParams } from "@/lib/month-filter";
 import type { Transaction } from "@/types/finance";
 import { UploadWorkspace } from "@/app/uploads/UploadWorkspace";
 
@@ -36,8 +37,14 @@ function SummaryCard({ label, value, caption }: { label: string; value: string; 
   );
 }
 
-export default async function UploadsPage() {
-  const data = await getDashboardData();
+export default async function UploadsPage({
+  searchParams
+}: {
+  searchParams?: Promise<MonthSearchParams>;
+}) {
+  const params = searchParams ? await searchParams : {};
+  const selectedMonth = resolveMonthParam(params);
+  const data = await getDashboardData(selectedMonth, true);
   const reviewRows = data.transactions.filter(isReviewNeeded);
   const recentRows = [...data.transactions].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
   const latestUpload = data.uploadBatches[0];
@@ -47,6 +54,7 @@ export default async function UploadsPage() {
       title="업로드 검증"
       description="은행, 카드, 파로스, 자산·부채 파일을 업로드하고 원본/거래/검증 상태를 확인합니다."
       periodLabel={data.currentMonth || "2026-05"}
+      availableMonths={data.availableMonths}
       activePath="/uploads"
     >
       <div className="grid gap-6">

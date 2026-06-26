@@ -11,6 +11,7 @@ import {
   WalletCards
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
+import { resolveMonthParam, withMonthParam, type MonthSearchParams } from "@/lib/month-filter";
 import { endingAmount, formatCompactKRW, formatKRW, sumBy } from "@/services/dashboard/calculations";
 import { getDashboardData } from "@/services/dashboard/liveData";
 import type { BalanceMovement, Transaction } from "@/types/finance";
@@ -371,8 +372,14 @@ function CashFlowBox({
   );
 }
 
-export default async function DashboardPage() {
-  const data = await getDashboardData();
+export default async function DashboardPage({
+  searchParams
+}: {
+  searchParams?: Promise<MonthSearchParams>;
+}) {
+  const params = searchParams ? await searchParams : {};
+  const selectedMonth = resolveMonthParam(params);
+  const data = await getDashboardData(selectedMonth);
   const { transactions, balanceMovements, bankAccounts } = data;
 
   const currentMonth = data.currentMonth || "2026-05";
@@ -435,6 +442,7 @@ export default async function DashboardPage() {
       title="경영현황"
       description="현금, 대출, 자금 흐름, 재무상태, 지출 비중을 시각화해서 한 화면에서 봅니다."
       periodLabel={currentMonth}
+      availableMonths={data.availableMonths}
       activePath="/dashboard"
     >
       <main className="grid gap-4">
@@ -482,7 +490,7 @@ export default async function DashboardPage() {
                 <h2 className="section-title">월간 자금 흐름</h2>
                 <p className="mt-1 text-sm text-slate-500">최근 거래일 기준 입금/출금 흐름입니다.</p>
               </div>
-              <Link href="/bank" className="btn btn-soft">통장 상세 <ArrowRight size={14} /></Link>
+              <Link href={withMonthParam("/bank", currentMonth)} className="btn btn-soft">통장 상세 <ArrowRight size={14} /></Link>
             </div>
             <div className="grid grid-cols-5 gap-3 max-2xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
               <CashFlowBox
@@ -553,7 +561,7 @@ export default async function DashboardPage() {
               <h2 className="section-title">주요 지출분류</h2>
               <p className="mt-1 text-sm text-slate-500">지출 분석 기준 대카테고리별 규모와 비중입니다.</p>
             </div>
-            <Link href="/expenses" className="btn btn-soft">지출 분석 <ArrowRight size={14} /></Link>
+            <Link href={withMonthParam("/expenses", currentMonth)} className="btn btn-soft">지출 분석 <ArrowRight size={14} /></Link>
           </div>
           <div className="grid grid-cols-[minmax(0,1fr)_330px] items-start gap-4 max-xl:grid-cols-1">
             <div className="grid gap-3">

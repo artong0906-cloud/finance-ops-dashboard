@@ -1,12 +1,19 @@
 export const dynamic = "force-dynamic";
 
 import { AppShell } from "@/components/layout/AppShell";
+import { resolveMonthParam, type MonthSearchParams } from "@/lib/month-filter";
 import { chartColors, inflowColor, outflowColor, RankBar, signedKRW, StackedBar, SummaryBox } from "@/components/shared/FinanceViz";
 import { formatCompactKRW, formatKRW, sumBy } from "@/services/dashboard/calculations";
 import { getDashboardData } from "@/services/dashboard/liveData";
 
-export default async function BankPage() {
-  const data = await getDashboardData();
+export default async function BankPage({
+  searchParams
+}: {
+  searchParams?: Promise<MonthSearchParams>;
+}) {
+  const params = searchParams ? await searchParams : {};
+  const selectedMonth = resolveMonthParam(params);
+  const data = await getDashboardData(selectedMonth);
   const { bankAccounts, transactions } = data;
   const bankRows = transactions.filter((row) => row.source === "은행");
   const accountNameById = new Map(bankAccounts.map((account) => [account.id, account.accountName]));
@@ -36,7 +43,7 @@ export default async function BankPage() {
   ].filter((segment) => segment.amount > 0);
 
   return (
-    <AppShell title="통장 입출금" description="실제 업로드된 5월 은행 거래 기준으로 입금, 출금, 내부이체를 확인합니다." periodLabel={data.currentMonth || "2026-05"} activePath="/bank">
+    <AppShell title="통장 입출금" description="선택한 월의 은행 거래 기준으로 입금, 출금, 내부이체를 확인합니다." periodLabel={data.currentMonth || "2026-05"} availableMonths={data.availableMonths} activePath="/bank">
       <section className="mb-5 grid grid-cols-5 gap-3 max-2xl:grid-cols-3 max-xl:grid-cols-2 max-md:grid-cols-1">
         <SummaryBox caption="월말 - 순현금흐름" label="월초잔액" tone="stone" value={formatKRW(openingBalanceTotal)} />
         <SummaryBox caption={`${bankRows.filter((row) => row.cashFlowType === "입금").length.toLocaleString("ko-KR")}건`} label="월 입금" value={formatKRW(cashInTotal)} />
