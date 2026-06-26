@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FileSearch, RefreshCw, Save, UploadCloud } from "lucide-react";
+import { FileSearch, RefreshCw, Save, Trash2, UploadCloud } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { parseUploadFile, type UploadPreview } from "@/services/uploads/parse";
 import { normalizeUploadRows, type UploadType } from "@/services/uploads/normalize";
@@ -67,6 +67,7 @@ export function UploadWorkspace() {
   const [isParsing, setIsParsing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingBatches, setIsLoadingBatches] = useState(false);
+  const [deletingBatchId, setDeletingBatchId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -167,6 +168,44 @@ export function UploadWorkspace() {
       setError(err instanceof Error ? err.message : "업로드 저장 중 오류가 발생했습니다.");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleDeleteBatch(batch: UploadBatch) {
+    setMessage("");
+    setError("");
+
+    const balanceNotice = batch.upload_type === "balance"
+      ? "\n\n자산/부채 업로드는 해당 기준월의 자산/부채 집계도 함께 삭제됩니다."
+      : "";
+    const ok = window.confirm(
+      `"${batch.file_name}" 업로드 기록을 삭제할까요?\n\n원본 ${batch.rawRowCount.toLocaleString("ko-KR")}행과 생성된 거래 ${batch.transactionCount.toLocaleString("ko-KR")}건이 함께 삭제됩니다.${balanceNotice}`
+    );
+    if (!ok) return;
+
+    setDeletingBatchId(batch.id);
+    try {
+      const headers = await getAuthHeaders(true);
+      const response = await fetch("/api/uploads", {
+        method: "DELETE",
+        headers,
+        credentials: "include",
+        body: JSON.stringify({ id: batch.id })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "업로드 기록 삭제에 실패했습니다.");
+
+      const deleted = result.deleted || {};
+      setMessage(
+        `삭제 완료: 원본 ${(deleted.rawRowCount || 0).toLocaleString("ko-KR")}행 / 거래 ${(deleted.transactionCount || 0).toLocaleString("ko-KR")}건` +
+        (deleted.balanceMovementCount ? ` / 자산·부채 ${(deleted.balanceMovementCount || 0).toLocaleString("ko-KR")}건` : "")
+      );
+      setBatches((current) => current.filter((item) => item.id !== batch.id));
+      await loadBatches();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "업로드 기록 삭제 중 오류가 발생했습니다.");
+    } finally {
+      setDeletingBatchId(null);
     }
   }
 
@@ -309,7 +348,7 @@ export function UploadWorkspace() {
         </div>
         <div className="mt-4 table-wrap">
           <table>
-            <thead><tr><th>업로드일</th><th>유형</th><th>파일명</th><th>상태</th><th>업로드자</th><th>원본행</th><th>거래건</th></tr></thead>
+            <thead><tr><th>업로드일</th><th>유형</th><th>파일명</th><th>상태</th><th>업로드자</th><th>원본행</th><th>거래건</th><th className="text-right">관리</th></tr></thead>
             <tbody>
               {batches.map((batch) => (
                 <tr key={batch.id}>
@@ -320,9 +359,20 @@ export function UploadWorkspace() {
                   <td>{batch.uploaded_by || "-"}</td>
                   <td>{batch.rawRowCount.toLocaleString("ko-KR")}</td>
                   <td>{batch.transactionCount.toLocaleString("ko-KR")}</td>
+                  <td className="text-right">
+                    <button
+                      className="inline-flex min-h-[34px] items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-xs font-black text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={() => handleDeleteBatch(batch)}
+                      disabled={Boolean(deletingBatchId) || isLoadingBatches || isSaving}
+                      type="button"
+                    >
+                      <Trash2 size={13} />
+                      {deletingBatchId === batch.id ? "삭제 중" : "삭제"}
+                    </button>
+                  </td>
                 </tr>
               ))}
-              {batches.length === 0 ? <tr><td colSpan={7} className="text-slate-500">아직 업로드 이력이 없습니다.</td></tr> : null}
+              {batches.length === 0 ? <tr><td colSpan={8} className="text-slate-500">아직 업로드 이력이 없습니다.</td></tr> : null}
             </tbody>
           </table>
         </div>

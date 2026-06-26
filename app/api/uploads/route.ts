@@ -33,6 +33,52 @@ async function tableExists(admin: any, tableName: string) {
   return !error;
 }
 
+async function countRows(admin: any, tableName: string, columnName: string, value: string) {
+  const { count, error } = await admin
+    .from(tableName)
+    .select("id", { count: "exact", head: true })
+    .eq(columnName, value);
+
+  if (error) return 0;
+  return count || 0;
+}
+
+function normalizeMonthValue(value: unknown) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+
+  const match = raw.match(/(20\d{2}|19\d{2})[.\-/년\s]*(\d{1,2})/);
+  if (!match) return null;
+
+  return `${match[1]}-${match[2].padStart(2, "0")}`;
+}
+
+function inferRawRowMonth(row: { raw_data?: Record<string, unknown> | null; normalized_data?: Record<string, unknown> | null }) {
+  const normalized = row.normalized_data || {};
+  const raw = row.raw_data || {};
+  const values = [
+    normalized.month,
+    normalized.transaction_date,
+    normalized.date,
+    raw.month,
+    raw.date,
+    raw["월"],
+    raw["기준월"],
+    raw["집계월"],
+    raw["마감월"],
+    raw["일자"],
+    raw["날짜"],
+    raw["거래일자"]
+  ];
+
+  for (const value of values) {
+    const month = normalizeMonthValue(value);
+    if (month) return month;
+  }
+
+  return null;
+}
+
 export async function GET(request: NextRequest) {
   const profileResult = await getApiUser(request);
   if (!profileResult.ok) return profileResult.response;
@@ -53,25 +99,18 @@ export async function GET(request: NextRequest) {
   if (batchIds.length > 0) {
     const hasRawRows = await tableExists(admin, "upload_raw_rows");
     if (hasRawRows) {
-      const { data: rawRows } = await admin
-        .from("upload_raw_rows")
-        .select("upload_batch_id")
-        .in("upload_batch_id", batchIds);
-      rawCounts = (rawRows || []).reduce<Record<string, number>>((acc, row: { upload_batch_id: string }) => {
-        acc[row.upload_batch_id] = (acc[row.upload_batch_id] || 0) + 1;
-        return acc;
-      }, {});
+      const pairs = await Promise.all(batchIds.map(async (batchId) => [
+        batchId,
+        await countRows(admin, "upload_raw_rows", "upload_batch_id", batchId)
+      ] as const));
+      rawCounts = Object.fromEntries(pairs);
     }
 
-    const { data: transactions } = await admin
-      .from("transactions")
-      .select("upload_batch_id")
-      .in("upload_batch_id", batchIds);
-    transactionCounts = (transactions || []).reduce<Record<string, number>>((acc, row: { upload_batch_id: string }) => {
-      if (!row.upload_batch_id) return acc;
-      acc[row.upload_batch_id] = (acc[row.upload_batch_id] || 0) + 1;
-      return acc;
-    }, {});
+    const transactionPairs = await Promise.all(batchIds.map(async (batchId) => [
+      batchId,
+      await countRows(admin, "transactions", "upload_batch_id", batchId)
+    ] as const));
+    transactionCounts = Object.fromEntries(transactionPairs);
   }
 
   return NextResponse.json({
@@ -81,6 +120,89 @@ export async function GET(request: NextRequest) {
       transactionCount: transactionCounts[batch.id] || 0
     }))
   });
+}
+
+export async function DELETE(request: NextRequest) {
+  const profileResult = await getApiUser(request);
+  if (!profileResult.ok) return profileResult.response;
+
+  if (!canUpload(profileResult.profile.role)) {
+    return NextResponse.json({ error: "업로드 삭제는 admin 또는 finance 권한만 가능합니다." }, { status: 403 });
+  }
+
+  try {
+    const body = await request.json().catch(() => ({}));
+    const id = String(body.id || request.nextUrl.searchParams.get("id") || "").trim();
+
+    if (!/^[0-9a-f-]{36}$/i.test(id)) {
+      return NextResponse.json({ error: "삭제할 업로드 ID가 올바르지 않습니다." }, { status: 400 });
+    }
+
+    const admin = createAdminClient();
+    const { data: batch, error: batchError } = await admin
+      .from("upload_batches")
+      .select("id,upload_type,file_name")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (batchError) throw batchError;
+    if (!batch) return NextResponse.json({ error: "삭제할 업로드 기록을 찾을 수 없습니다." }, { status: 404 });
+
+    const hasRawRows = await tableExists(admin, "upload_raw_rows");
+    const rawRows = hasRawRows
+      ? ((await admin
+          .from("upload_raw_rows")
+          .select("id,raw_data,normalized_data")
+          .eq("upload_batch_id", id)).data || []) as { id: string; raw_data: Record<string, unknown> | null; normalized_data: Record<string, unknown> | null }[]
+      : [];
+
+    const balanceMonths = batch.upload_type === "balance"
+      ? Array.from(new Set(rawRows.map(inferRawRowMonth).filter((month): month is string => Boolean(month))))
+      : [];
+
+    const { data: deletedTransactions, error: transactionDeleteError } = await admin
+      .from("transactions")
+      .delete()
+      .eq("upload_batch_id", id)
+      .select("id");
+    if (transactionDeleteError) throw transactionDeleteError;
+
+    let balanceMovementCount = 0;
+    if (balanceMonths.length > 0) {
+      const { data: deletedBalanceRows, error: balanceDeleteError } = await admin
+        .from("balance_movements")
+        .delete()
+        .in("month", balanceMonths)
+        .select("id");
+      if (balanceDeleteError) throw balanceDeleteError;
+      balanceMovementCount = deletedBalanceRows?.length || 0;
+    }
+
+    const rawRowCount = rawRows.length;
+    const { error: batchDeleteError } = await admin
+      .from("upload_batches")
+      .delete()
+      .eq("id", id);
+    if (batchDeleteError) throw batchDeleteError;
+
+    revalidateTag("dashboard-data", { expire: 0 });
+
+    return NextResponse.json({
+      ok: true,
+      deleted: {
+        id,
+        fileName: batch.file_name,
+        uploadType: batch.upload_type,
+        rawRowCount,
+        transactionCount: deletedTransactions?.length || 0,
+        balanceMovementCount,
+        balanceMonths
+      }
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "업로드 삭제 중 오류가 발생했습니다.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
