@@ -40,6 +40,41 @@ const miscKeywords = [
   "이자수익"
 ];
 const loanExecutionKeywords = ["대출실행", "대출금입금", "대출금 입금", "신규대출", "차입금입금", "차입금 입금", "단기차입금", "장기차입금", "차입"];
+const excludedRevenueDepositKeywords = [
+  "계좌이체",
+  "계좌간이동",
+  "중복집계제외",
+  "보통예금",
+  "타사이체",
+  "광고인하나은행",
+  "광고인신한은행",
+  "광고인기업은행",
+  "광고인cma",
+  "주식회사광고인",
+  "(주)광고인",
+  "카드대금",
+  "카드미지급비용",
+  "법인카드결제",
+  "롯데카드",
+  "현대카드",
+  "비씨카드",
+  "하나카드",
+  "국민카드",
+  "신한카드"
+];
+const nonRevenueMainCategories = [
+  "부채",
+  "계좌이체",
+  "카드대금",
+  "광고비",
+  "인건비",
+  "자산취득",
+  "인재투자비",
+  "금융비용",
+  "외상매입금",
+  "대납금",
+  "세금"
+];
 
 type RevenueCategory = (typeof revenueCategories)[number];
 type RevenueFilter = typeof allFilter | RevenueCategory;
@@ -93,9 +128,22 @@ function isLoanExecutionDeposit(row: Transaction) {
   return loanExecutionKeywords.some((keyword) => text.includes(normalizeText(keyword)));
 }
 
+function isExcludedRevenueDeposit(row: Transaction) {
+  if (matchedGovernmentSupportKeyword(row) || matchedMiscKeyword(row)) return false;
+  if (row.isInternalTransfer || isLoanExecutionDeposit(row)) return true;
+
+  const text = rowText(row);
+  if (excludedRevenueDepositKeywords.some((keyword) => text.includes(normalizeText(keyword)))) return true;
+  if (normalizeText(row.subCategory).includes(normalizeText("차입금"))) return true;
+  if (nonRevenueMainCategories.some((category) => normalizeText(row.mainCategory).includes(normalizeText(category)))) return true;
+
+  return false;
+}
+
 function classifyRevenue(row: Transaction): Pick<RevenueRow, "category" | "rule"> {
   const governmentSupportKeyword = matchedGovernmentSupportKeyword(row);
   const miscKeyword = matchedMiscKeyword(row);
+  const mainCategory = normalizeText(row.mainCategory);
 
   if (governmentSupportKeyword) {
     return {
@@ -108,6 +156,13 @@ function classifyRevenue(row: Transaction): Pick<RevenueRow, "category" | "rule"
     return {
       category: "기타매출",
       rule: `기타매출 키워드: ${miscKeyword}`
+    };
+  }
+
+  if (mainCategory.includes(normalizeText("영업외수익"))) {
+    return {
+      category: "기타매출",
+      rule: "영업외수익 기준: 기타매출"
     };
   }
 
@@ -165,7 +220,7 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
     && row.cashFlowType === "입금"
     && !row.isInternalTransfer
   ));
-  const depositRows = bankDepositRows.filter((row) => !isLoanExecutionDeposit(row));
+  const depositRows = bankDepositRows.filter((row) => !isExcludedRevenueDeposit(row));
   const revenueRows: RevenueRow[] = depositRows.map((row) => ({
     row,
     ...classifyRevenue(row)
