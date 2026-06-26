@@ -134,16 +134,39 @@ export function inferMixedUploadType(row: Record<string, string>): PersistedUplo
   const hasBankValue = hasBankAmount || hasValue(row, bankBalanceKeys) || hasValue(row, bankAccountKeys);
   const hasCardValue = hasValue(row, cardSignalKeys);
   const hasBalanceValue = hasValue(row, statementTypeKeys) && hasValue(row, balanceCategoryKeys);
+  const sourceSaysBalance = sourceHint.includes("자산")
+    || sourceHint.includes("부채")
+    || sourceHint.includes("현금성자산")
+    || sourceHint.includes("유무형자산")
+    || sourceHint.includes("무형자산")
+    || sourceHint.includes("유형자산")
+    || sourceHint.includes("비품")
+    || sourceHint.includes("보증금")
+    || sourceHint.includes("대여금")
+    || sourceHint.includes("대출")
+    || sourceHint.includes("balance");
+  const sourceSaysBank = sourceHint.includes("은행")
+    || sourceHint.includes("통장")
+    || sourceHint.includes("계좌")
+    || sourceHint.includes("입출금")
+    || sourceHint.includes("입출")
+    || sourceHint.includes("예금")
+    || sourceHint.includes("bank")
+    || sourceHint.includes("입금")
+    || sourceHint.includes("출금")
+    || sourceHint.includes("입지급");
+  const sourceSaysCard = sourceHint.includes("카드")
+    || sourceHint.includes("승인")
+    || sourceHint.includes("가맹점")
+    || sourceHint.includes("card");
 
-  if (hasBalanceValue) return "balance";
-  if (hasBankValue) return "bank";
+  if (sourceSaysBalance) return "balance";
+  if (hasBankValue || sourceSaysBank) return "bank";
   if (hasCardValue) return "card";
+  if (sourceSaysCard) return "card";
+  if (hasBalanceValue) return "balance";
 
-  if (sourceHint.includes("자산") || sourceHint.includes("부채") || sourceHint.includes("현금성자산") || sourceHint.includes("유무형자산") || sourceHint.includes("보증금") || sourceHint.includes("대여금") || sourceHint.includes("대출") || sourceHint.includes("balance")) return "balance";
   if (sourceHint.includes("파로스") || sourceHint.includes("분개") || sourceHint.includes("전표") || sourceHint.includes("pharos")) return "pharos";
-  if (sourceHint.includes("카드") || sourceHint.includes("승인") || sourceHint.includes("가맹점") || sourceHint.includes("card")) return "card";
-  if (sourceHint.includes("은행") || sourceHint.includes("통장") || sourceHint.includes("계좌") || sourceHint.includes("입출금") || sourceHint.includes("입출") || sourceHint.includes("예금") || sourceHint.includes("bank")) return "bank";
-  if (sourceHint.includes("입금") || sourceHint.includes("출금") || sourceHint.includes("입지급")) return "bank";
   if (hasHeader(row, ["기초금액", "전월잔액", "당월증가", "당월감소", "자산부채구분", "statement_type"])) return "balance";
   if (hasHeader(row, ["전표일자", "분개"]) && (hasAmountValue(row, ["차변"]) || hasAmountValue(row, ["대변"]))) return "pharos";
   if (hasHeader(row, ["승인일자", "이용일자", "사용일자", "가맹점명", "카드사", "카드명", "카드사/사용자"])) return "card";
