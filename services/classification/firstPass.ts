@@ -39,13 +39,26 @@ export type FirstPassResult = {
   matchedRule: string;
 };
 
+export type UserMappingRule = {
+  rule_name?: string | null;
+  source?: string | null;
+  keyword: string;
+  business_unit?: string | null;
+  main_category?: string | null;
+  sub_category?: string | null;
+  detail_category?: string | null;
+  expense_basis?: string | null;
+  priority?: number | null;
+  created_at?: string | null;
+};
+
 const units: BusinessUnitValue[] = ["광고사업부", "플랫폼", "대외협력", "공통사용분", "미배분"];
 
 const accountRules: { keywords: string[]; accountId: string; businessUnit: BusinessUnitValue }[] = [
-  { keywords: ["BANK_AD_001", "29812261804018"], accountId: "BANK_AD_001", businessUnit: "광고사업부" },
-  { keywords: ["BANK_PLATFORM_001", "19013209204016"], accountId: "BANK_PLATFORM_001", businessUnit: "플랫폼" },
-  { keywords: ["BANK_PARTNER_001", "12691002911604", "12691002745704"], accountId: "BANK_PARTNER_001", businessUnit: "대외협력" },
-  { keywords: ["BANK_COMMON_001", "100037330273", "한국투자", "한투", "신한"], accountId: "BANK_COMMON_001", businessUnit: "공통사용분" }
+  { keywords: ["BANK_PLATFORM_001", "19013209204016", "기업은행(플랫폼)", "기업(190", "190~", "190132"], accountId: "BANK_PLATFORM_001", businessUnit: "플랫폼" },
+  { keywords: ["BANK_PARTNER_001", "12691002911604", "12691002745704", "하나은행", "하나,", "11604", "45704"], accountId: "BANK_PARTNER_001", businessUnit: "대외협력" },
+  { keywords: ["BANK_COMMON_001", "100037330273", "한국투자", "한투", "신한"], accountId: "BANK_COMMON_001", businessUnit: "공통사용분" },
+  { keywords: ["BANK_AD_001", "29812261804018", "기업은행", "기업(298", "298~", "298122"], accountId: "BANK_AD_001", businessUnit: "광고사업부" }
 ];
 
 const governmentIncomeKeywords = [
@@ -95,6 +108,48 @@ function includesAny(text: string, keywords: string[]) {
   return keywords.some((keyword) => text.includes(compact(keyword)));
 }
 
+function matchesUserKeyword(text: string, keyword: string) {
+  const raw = String(keyword || "").trim();
+  if (!raw) return false;
+
+  const normalized = compact(raw.replace(/^exact:/i, ""));
+  if (!normalized) return false;
+
+  if (raw.includes("+")) {
+    return raw
+      .split("+")
+      .map(compact)
+      .filter(Boolean)
+      .every((token) => text.includes(token));
+  }
+
+  if (raw.includes("|")) {
+    return raw
+      .split("|")
+      .map(compact)
+      .filter(Boolean)
+      .some((token) => text.includes(token));
+  }
+
+  return text.includes(normalized);
+}
+
+function findUserMappingRule(input: FirstPassInput, rules: UserMappingRule[]) {
+  if (rules.length === 0) return undefined;
+
+  const text = buildText(input);
+  const source = compact(input.source);
+
+  return [...rules]
+    .filter((rule) => rule.keyword && (!rule.source || compact(rule.source) === source))
+    .sort((a, b) => {
+      const priority = Number(a.priority || 100) - Number(b.priority || 100);
+      if (priority !== 0) return priority;
+      return String(b.created_at || "").localeCompare(String(a.created_at || ""));
+    })
+    .find((rule) => matchesUserKeyword(text, rule.keyword));
+}
+
 function normalizeBusinessUnit(value?: string | null): BusinessUnitValue {
   const raw = String(value || "");
   return units.find((unit) => raw.includes(unit)) || "미배분";
@@ -130,7 +185,7 @@ function buildText(input: FirstPassInput) {
   ].join(" "));
 }
 
-export function classifyFirstPass(input: FirstPassInput): FirstPassResult {
+export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserMappingRule[] = []): FirstPassResult {
   const text = buildText(input);
   const account = inferAccount(text);
   const source = String(input.source || "");
@@ -349,6 +404,23 @@ export function classifyFirstPass(input: FirstPassInput): FirstPassResult {
       reviewStatus: "정상",
       confidence: 0.66,
       matchedRule: "card-account-fallback"
+    });
+  }
+
+  const userRule = findUserMappingRule(input, userMappingRules);
+  if (userRule) {
+    const nextBusinessUnit = normalizeBusinessUnit(userRule.business_unit || result.businessUnit);
+    apply({
+      businessUnit: nextBusinessUnit,
+      mainCategory: userRule.main_category?.trim() || result.mainCategory,
+      subCategory: userRule.sub_category?.trim() || result.subCategory,
+      detailCategory: userRule.detail_category?.trim() || result.detailCategory,
+      expenseBasis: normalizeExpenseBasis(userRule.expense_basis) || result.expenseBasis,
+      isCommonUse: nextBusinessUnit === "공통사용분" ? true : result.isCommonUse,
+      commonPolicy: nextBusinessUnit === "공통사용분" ? result.commonPolicy || "광고사업부 제외" : result.commonPolicy,
+      reviewStatus: "정상",
+      confidence: 0.95,
+      matchedRule: `user-mapping-rule:${userRule.rule_name || userRule.keyword}`
     });
   }
 

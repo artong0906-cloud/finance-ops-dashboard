@@ -2,7 +2,7 @@ import { unstable_cache } from "next/cache";
 import { bankAccounts as mockBankAccounts, transactions as mockTransactions } from "@/data/mock";
 import { mayBalanceMovements } from "@/data/mayBalanceSnapshot";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { classifyFirstPass } from "@/services/classification/firstPass";
+import { classifyFirstPass, type UserMappingRule } from "@/services/classification/firstPass";
 import type { BalanceMovement, BankAccount, Transaction } from "@/types/finance";
 
 type DbTransaction = {
@@ -57,6 +57,8 @@ type DbRawUploadRow = {
   raw_data: Record<string, unknown> | null;
   normalized_data: Record<string, unknown> | null;
 };
+
+type DbMappingRule = UserMappingRule;
 
 async function fetchAllTransactions(admin: ReturnType<typeof createAdminClient>) {
   const pageSize = 1000;
@@ -286,7 +288,7 @@ function applyTemporaryMayUnit(row: DbTransaction, transaction: Transaction): Tr
   };
 }
 
-function toTransaction(row: DbTransaction, cardIssuerLookup?: Map<string, string[]>): Transaction {
+function toTransaction(row: DbTransaction, cardIssuerLookup?: Map<string, string[]>, mappingRules: UserMappingRule[] = []): Transaction {
   const cardBudgetGroup = row.card_budget_group || consumeCardIssuer(row, cardIssuerLookup) || undefined;
   const firstPass = classifyFirstPass({
     source: row.source,
@@ -307,9 +309,11 @@ function toTransaction(row: DbTransaction, cardIssuerLookup?: Map<string, string
     commonPolicy: row.common_policy,
     reviewStatus: row.review_status,
     memo: row.memo
-  });
+  }, mappingRules);
   const shouldReclassifyBankDeposit = row.source === "은행" && row.cash_flow_type === "입금";
+  const shouldApplyUserRule = firstPass.matchedRule.startsWith("user-mapping-rule:");
   const useFirstPass = shouldReclassifyBankDeposit
+    || shouldApplyUserRule
     || row.business_unit === "미배분"
     || row.review_status === "확인필요"
     || !row.detail_category
@@ -432,6 +436,7 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
       bankResult,
       balanceResult,
       batchResult,
+      mappingRuleResult,
     ] = await Promise.all([
       fetchAllTransactions(admin),
       admin
@@ -447,7 +452,13 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
         .from("upload_batches")
         .select("id,upload_type,file_name,status,uploaded_by,uploaded_at")
         .order("uploaded_at", { ascending: false })
-        .limit(10)
+        .limit(10),
+      admin
+        .from("mapping_rules")
+        .select("rule_name,source,keyword,business_unit,main_category,sub_category,detail_category,expense_basis,priority,created_at")
+        .eq("is_active", true)
+        .order("priority", { ascending: true })
+        .order("created_at", { ascending: false })
     ]);
 
     const dbTransactions = (transactionResult.data || []) as DbTransaction[];
@@ -476,6 +487,7 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
     const currentTransactions = currentMonth
       ? dbTransactions.filter((row) => row.transaction_date?.startsWith(currentMonth))
       : dbTransactions;
+    const mappingRules = ((mappingRuleResult as { data?: DbMappingRule[]; error?: unknown }).data || []) as UserMappingRule[];
     const transactionBatchIds = Array.from(new Set(
       currentTransactions
         .map((row) => row.upload_batch_id)
@@ -490,7 +502,7 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
       mode: "live",
       currentMonth,
       availableMonths,
-      transactions: currentTransactions.map((row) => toTransaction(row, cardIssuerLookup)),
+      transactions: currentTransactions.map((row) => toTransaction(row, cardIssuerLookup, mappingRules)),
       bankAccounts: ((bankResult.data || []) as DbBankAccount[]).map(toBankAccount),
       balanceMovements: balanceRowsForMonth(currentMonth, dbBalanceMovements),
       uploadBatches: ((batchResult.data || []) as Record<string, string | null>[]).map((row) => ({

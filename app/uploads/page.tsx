@@ -159,7 +159,7 @@ export default async function UploadsPage({
           </div>
         </section>
 
-        <UploadWorkspace />
+        <UploadWorkspace reviewRows={reviewRows} />
       </div>
     </AppShell>
   );

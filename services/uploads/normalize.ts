@@ -1,4 +1,4 @@
-import { classifyFirstPass, type BusinessUnitValue, type ExpenseBasisValue } from "@/services/classification/firstPass";
+import { classifyFirstPass, type BusinessUnitValue, type ExpenseBasisValue, type UserMappingRule } from "@/services/classification/firstPass";
 
 export type UploadType = "bank" | "card" | "pharos" | "balance" | "mixed";
 export type PersistedUploadType = Exclude<UploadType, "mixed">;
@@ -134,6 +134,8 @@ export function inferMixedUploadType(row: Record<string, string>): PersistedUplo
   const hasBankValue = hasBankAmount || hasValue(row, bankBalanceKeys) || hasValue(row, bankAccountKeys);
   const hasCardValue = hasValue(row, cardSignalKeys);
   const hasBalanceValue = hasValue(row, statementTypeKeys) && hasValue(row, balanceCategoryKeys);
+  const hasBankTransactionHeader = hasHeader(row, ["거래일자", "입금", "출금", "거래후잔액", "거래 후 잔액", "입금의뢰인", "출금계좌인자내용"]);
+  const hasBalanceTemplateHeader = hasHeader(row, ["기초금액", "전월잔액", "당월증가", "당월감소", "자산부채구분", "opening_amount", "increase_amount", "decrease_amount"]);
   const sourceSaysBalance = sourceHint.includes("자산")
     || sourceHint.includes("부채")
     || sourceHint.includes("현금성자산")
@@ -160,7 +162,8 @@ export function inferMixedUploadType(row: Record<string, string>): PersistedUplo
     || sourceHint.includes("가맹점")
     || sourceHint.includes("card");
 
-  if (sourceSaysBalance) return "balance";
+  if ((sourceSaysBank || hasBankTransactionHeader || (hasBankValue && !sourceSaysBalance)) && !hasBalanceTemplateHeader) return "bank";
+  if (sourceSaysBalance || hasBalanceValue || hasBalanceTemplateHeader) return "balance";
   if (hasBankValue || sourceSaysBank) return "bank";
   if (hasCardValue) return "card";
   if (sourceSaysCard) return "card";
@@ -355,11 +358,11 @@ function normalizeBalanceRow(row: Record<string, string>) {
   };
 }
 
-export function normalizeUploadRows(uploadType: UploadType, rows: Record<string, string>[]): NormalizedUploadRow[] {
+export function normalizeUploadRows(uploadType: UploadType, rows: Record<string, string>[], userMappingRules: UserMappingRule[] = []): NormalizedUploadRow[] {
   return rows.map((row, index) => {
     if (uploadType === "mixed") {
       const detectedUploadType = inferMixedUploadType(row);
-      const normalized = normalizeUploadRows(detectedUploadType, [row])[0];
+      const normalized = normalizeUploadRows(detectedUploadType, [row], userMappingRules)[0];
       const detectedLabel = detectedUploadType === "bank" ? "은행"
         : detectedUploadType === "card" ? "카드"
           : detectedUploadType === "balance" ? "자산·부채"
@@ -399,6 +402,7 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
     const { amount, cashFlowType } = getAmountAndFlow(row, uploadType);
     const businessUnit = normalizeBusinessUnit(pick(row, businessUnitKeys));
     const accountId = uploadType === "bank" ? pick(row, bankAccountKeys) || null : null;
+    const accountLookupText = uploadType === "bank" ? [accountId, sheetName].filter(Boolean).join(" ") : accountId;
     const cardBudgetGroup = uploadType === "card" ? pick(row, cardBudgetGroupKeys) || null : null;
     const mainCategory = pick(row, mainCategoryKeys) || null;
     const subCategory = pick(row, subCategoryKeys) || null;
@@ -415,7 +419,7 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
     const firstPass = classifyFirstPass({
       source,
       businessUnit,
-      accountId,
+      accountId: accountLookupText,
       cardBudgetGroup,
       vendor,
       description,
@@ -423,8 +427,8 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
       cashFlowType,
       mainCategory,
       subCategory,
-      memo: baseMemo
-    });
+      memo: [baseMemo, sheetName].filter(Boolean).join(" ")
+    }, userMappingRules);
     const autoMemo = `1차분류: ${firstPass.matchedRule}`;
     const memo = [baseMemo, autoMemo].filter(Boolean).join(" / ") || null;
 
