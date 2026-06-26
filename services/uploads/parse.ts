@@ -12,6 +12,7 @@ export type UploadPreview = {
 };
 
 export const uploadSheetNameKey = "__sheetName";
+export const uploadDetectedMonthKey = "__detectedMonth";
 
 type ParseUploadOptions = {
   allSheets?: boolean;
@@ -32,6 +33,27 @@ function normalizeHeader(value: unknown): string {
 
 function compact(value: string) {
   return normalizeHeader(value).replace(/\s/g, "").toLowerCase();
+}
+
+function inferSingleMonthFromText(value: string) {
+  const raw = normalizeHeader(value);
+  if (!raw) return "";
+
+  const fullMatches = Array.from(raw.matchAll(/(20\d{2}|19\d{2})[.\-/년\s]*(\d{1,2})\s*월?/g));
+  if (fullMatches.length === 1) {
+    const [, year, month] = fullMatches[0];
+    return `${year}-${month.padStart(2, "0")}`;
+  }
+
+  const monthMatches = Array.from(raw.matchAll(/(?:^|[^0-9])(\d{1,2})\s*월/g))
+    .map((match) => Number(match[1]))
+    .filter((month) => month >= 1 && month <= 12);
+  const uniqueMonths = Array.from(new Set(monthMatches));
+  if (uniqueMonths.length === 1) {
+    return `${new Date().getFullYear()}-${String(uniqueMonths[0]).padStart(2, "0")}`;
+  }
+
+  return "";
 }
 
 function cleanRow(row: Record<string, unknown>, headers: string[]) {
@@ -164,8 +186,9 @@ function looksLikeNonTransactionSummary(row: Record<string, string>) {
   return hasSummaryMarker && !hasTransactionSignal;
 }
 
-function parseExcelSheet(workbook: XLSX.WorkBook, sheetName: string) {
+function parseExcelSheet(workbook: XLSX.WorkBook, sheetName: string, fileName: string) {
   const sheet = workbook.Sheets[sheetName];
+  const detectedMonth = inferSingleMonthFromText(sheetName) || inferSingleMonthFromText(fileName);
   const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
     header: 1,
     defval: "",
@@ -187,10 +210,14 @@ function parseExcelSheet(workbook: XLSX.WorkBook, sheetName: string) {
     .map((row) => rowToObject(row.slice(0, maxColumns), headers))
     .filter((row) => !isEffectivelyEmpty(row))
     .filter((row) => !looksLikeNonTransactionSummary(row))
-    .map((row) => ({ [uploadSheetNameKey]: sheetName, ...row }));
+    .map((row) => ({
+      [uploadSheetNameKey]: sheetName,
+      [uploadDetectedMonthKey]: detectedMonth,
+      ...row
+    }));
 
   return {
-    headers: [uploadSheetNameKey, ...headers],
+    headers: [uploadSheetNameKey, uploadDetectedMonthKey, ...headers],
     rows,
     detectedHeaderRow: headerRowIndex + 1
   };
@@ -202,7 +229,7 @@ function parseExcel(buffer: ArrayBuffer, fileName: string, options: ParseUploadO
   if (sheetNames.length === 0) throw new Error("엑셀 파일에서 시트를 찾지 못했습니다.");
 
   const parsedSheets = sheetNames
-    .map((sheetName) => ({ sheetName, ...parseExcelSheet(workbook, sheetName) }))
+    .map((sheetName) => ({ sheetName, ...parseExcelSheet(workbook, sheetName, fileName) }))
     .filter((sheet) => sheet.rows.length > 0);
 
   if (parsedSheets.length === 0) {
