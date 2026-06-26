@@ -221,7 +221,7 @@ export function UploadWorkspace() {
           <div className="flex items-start justify-between gap-4 max-md:flex-col">
             <div>
               <h2 className="section-title">파일 업로드</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-500">CSV, XLSX, XLS 파일을 읽어 원본 행을 저장하고 1차 거래 데이터로 변환합니다. 통합 로우데이터는 여러 시트를 읽어 유형별로 자동 분리합니다.</p>
+              <p className="mt-2 text-sm leading-6 text-slate-500">CSV, XLSX, XLS 파일을 읽어 원본 행을 저장하고 1차 거래 데이터로 변환합니다. 통합 로우데이터는 여러 시트를 읽고 시트명 기준월까지 참고해 유형별로 자동 분리합니다.</p>
             </div>
             <span className="badge badge-warning">v4 MVP</span>
           </div>
@@ -238,7 +238,7 @@ export function UploadWorkspace() {
             <label className="grid gap-2 text-sm font-bold text-slate-700">
               파일 선택
               <input id="upload-file-input" className="field" type="file" accept=".csv,.xlsx,.xls" onChange={(event) => setFile(event.target.files?.[0] || null)} />
-              <span className="text-xs font-medium text-slate-500">통합 로우데이터는 시트명/원천/컬럼명 기준으로 은행·카드를 감지합니다.</span>
+              <span className="text-xs font-medium text-slate-500">통합 로우데이터는 시트명/기준월/원천/컬럼명 기준으로 은행·카드·자산부채를 감지합니다.</span>
             </label>
           </div>
 
@@ -303,13 +303,18 @@ export function UploadWorkspace() {
             <table>
               <thead>
                 <tr>
-                  <th>상태</th><th>일자</th><th>거래처/적요</th><th>금액</th><th>현금흐름</th><th>사업부</th><th>메모</th>
+                  <th>상태</th><th>시트/기준월</th><th>감지유형</th><th>일자</th><th>거래처/적요</th><th>금액</th><th>현금흐름</th><th>사업부</th><th>메모</th>
                 </tr>
               </thead>
               <tbody>
                 {normalizedPreview.map((row) => (
                   <tr key={row.rowIndex}>
                     <td><span className={row.parseStatus === "정상" ? "badge badge-good" : "badge badge-warning"}>{row.parseStatus}</span></td>
+                    <td>
+                      <span className="block font-bold text-slate-700">{String(row.normalizedData.sheet_name || row.rawData.__sheetName || "-")}</span>
+                      <span className="text-xs text-slate-500">{String(row.normalizedData.detected_month || row.normalizedData.month || row.rawData.__detectedMonth || "-")}</span>
+                    </td>
+                    <td>{String(row.normalizedData.detected_upload_label || row.normalizedData.detected_upload_type || typeLabel(uploadType))}</td>
                     <td>{String(row.normalizedData.transaction_date || "-")}</td>
                     <td>{String(row.normalizedData.vendor || row.normalizedData.description || "-")}</td>
                     <td className="font-black">{Number(row.normalizedData.amount || 0).toLocaleString("ko-KR")}</td>

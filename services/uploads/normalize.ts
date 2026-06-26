@@ -45,8 +45,10 @@ export type NormalizedUploadRow = {
   balanceMovement: NormalizedBalanceMovement | null;
 };
 
+const sheetNameKeys = ["__sheetName"];
+const detectedMonthKeys = ["__detectedMonth"];
 const dateKeys = ["거래일자", "거래일시", "거래일", "거래일자(년월일)", "승인일자", "이용일자", "사용일자", "전표일자", "일자", "날짜", "date"];
-const monthKeys = ["월", "기준월", "집계월", "마감월", "month", "기간"];
+const monthKeys = ["__detectedMonth", "월", "기준월", "집계월", "마감월", "month", "기간"];
 const statementTypeKeys = ["구분", "재무구분", "자산부채구분", "statement_type"];
 const balanceCategoryKeys = ["항목", "계정", "계정과목", "분류", "자산항목", "부채항목", "category"];
 const openingAmountKeys = ["기초", "기초금액", "전월말", "전월잔액", "opening_amount"];
@@ -70,6 +72,27 @@ const sourceHintKeys = ["__sheetName", "자료유형", "자료 구분", "원천"
 
 function compact(value: string) {
   return String(value || "").replace(/\s/g, "").toLowerCase();
+}
+
+function inferMonthFromText(value: string) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const fullMatches = Array.from(raw.matchAll(/(20\d{2}|19\d{2})[.\-/년\s]*(\d{1,2})\s*월?/g));
+  if (fullMatches.length === 1) {
+    const [, year, month] = fullMatches[0];
+    return `${year}-${month.padStart(2, "0")}`;
+  }
+
+  const monthMatches = Array.from(raw.matchAll(/(?:^|[^0-9])(\d{1,2})\s*월/g))
+    .map((match) => Number(match[1]))
+    .filter((month) => month >= 1 && month <= 12);
+  const uniqueMonths = Array.from(new Set(monthMatches));
+  if (uniqueMonths.length === 1) {
+    return `${new Date().getFullYear()}-${String(uniqueMonths[0]).padStart(2, "0")}`;
+  }
+
+  return "";
 }
 
 function pick(row: Record<string, string>, keys: string[]) {
@@ -116,10 +139,10 @@ export function inferMixedUploadType(row: Record<string, string>): PersistedUplo
   if (hasBankValue) return "bank";
   if (hasCardValue) return "card";
 
-  if (sourceHint.includes("자산") || sourceHint.includes("부채") || sourceHint.includes("balance")) return "balance";
-  if (sourceHint.includes("파로스") || sourceHint.includes("분개") || sourceHint.includes("pharos")) return "pharos";
-  if (sourceHint.includes("카드") || sourceHint.includes("card")) return "card";
-  if (sourceHint.includes("은행") || sourceHint.includes("통장") || sourceHint.includes("입출금") || sourceHint.includes("bank")) return "bank";
+  if (sourceHint.includes("자산") || sourceHint.includes("부채") || sourceHint.includes("현금성자산") || sourceHint.includes("유무형자산") || sourceHint.includes("보증금") || sourceHint.includes("대여금") || sourceHint.includes("대출") || sourceHint.includes("balance")) return "balance";
+  if (sourceHint.includes("파로스") || sourceHint.includes("분개") || sourceHint.includes("전표") || sourceHint.includes("pharos")) return "pharos";
+  if (sourceHint.includes("카드") || sourceHint.includes("승인") || sourceHint.includes("가맹점") || sourceHint.includes("card")) return "card";
+  if (sourceHint.includes("은행") || sourceHint.includes("통장") || sourceHint.includes("계좌") || sourceHint.includes("입출금") || sourceHint.includes("입출") || sourceHint.includes("예금") || sourceHint.includes("bank")) return "bank";
   if (sourceHint.includes("입금") || sourceHint.includes("출금") || sourceHint.includes("입지급")) return "bank";
   if (hasHeader(row, ["기초금액", "전월잔액", "당월증가", "당월감소", "자산부채구분", "statement_type"])) return "balance";
   if (hasHeader(row, ["전표일자", "분개"]) && (hasAmountValue(row, ["차변"]) || hasAmountValue(row, ["대변"]))) return "pharos";
@@ -145,14 +168,29 @@ export function parseAmount(value: string) {
   return isNegativeByParentheses ? -Math.abs(amount) : amount;
 }
 
-function normalizeDate(value: string) {
+function normalizeDate(value: string, fallbackMonth = "") {
   const raw = String(value || "").trim();
-  if (!raw) return "";
+  if (!raw && !fallbackMonth) return "";
 
   const match = raw.match(/(20\d{2}|19\d{2})[.\-/년\s]*(\d{1,2})[.\-/월\s]*(\d{1,2})/);
   if (match) {
     const [, y, m, d] = match;
     return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+
+  if (fallbackMonth) {
+    const [year, fallbackMonthNumber] = fallbackMonth.split("-");
+    const monthDay = raw.match(/(?:^|[^0-9])(\d{1,2})[.\-/월\s]+(\d{1,2})\s*일?(?:[^0-9]|$)/);
+    if (monthDay) {
+      const [, month, day] = monthDay;
+      return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+    }
+
+    const dayOnly = raw.match(/(?:^|[^0-9])(\d{1,2})\s*일?(?:[^0-9]|$)/);
+    if (dayOnly) {
+      const day = dayOnly[1];
+      return `${year}-${fallbackMonthNumber}-${day.padStart(2, "0")}`;
+    }
   }
 
   const serial = Number(raw);
@@ -171,11 +209,16 @@ function normalizeMonth(value: string) {
   const raw = String(value || "").trim();
   if (!raw) return "";
 
+  if (/^(20\d{2}|19\d{2})-\d{2}$/.test(raw)) return raw;
+
   const match = raw.match(/(20\d{2}|19\d{2})[.\-/년\s]*(\d{1,2})/);
   if (match) {
     const [, y, m] = match;
     return `${y}-${m.padStart(2, "0")}`;
   }
+
+  const inferred = inferMonthFromText(raw);
+  if (inferred) return inferred;
 
   const date = normalizeDate(raw);
   return date ? date.slice(0, 7) : "";
@@ -241,7 +284,9 @@ function inferMemo(missing: string[]) {
 }
 
 function normalizeBalanceRow(row: Record<string, string>) {
-  const month = normalizeMonth(pick(row, monthKeys) || pick(row, dateKeys));
+  const sheetName = pick(row, sheetNameKeys);
+  const detectedMonth = pick(row, detectedMonthKeys) || inferMonthFromText(sheetName);
+  const month = normalizeMonth(pick(row, monthKeys) || pick(row, dateKeys) || detectedMonth || sheetName);
   const statementType = normalizeStatementType(pick(row, statementTypeKeys));
   const category = normalizeBalanceCategory(pick(row, balanceCategoryKeys));
   const openingAmount = parseAmount(pick(row, openingAmountKeys));
@@ -274,6 +319,8 @@ function normalizeBalanceRow(row: Record<string, string>) {
         }
       : null,
     normalizedData: {
+      sheet_name: sheetName,
+      detected_month: detectedMonth || month,
       month,
       statement_type: statementType,
       category,
@@ -321,7 +368,9 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
       };
     }
 
-    const transactionDate = normalizeDate(pick(row, dateKeys));
+    const sheetName = pick(row, sheetNameKeys);
+    const detectedMonth = pick(row, detectedMonthKeys) || inferMonthFromText(sheetName);
+    const transactionDate = normalizeDate(pick(row, dateKeys), detectedMonth);
     const vendor = pick(row, vendorKeys) || null;
     const description = pick(row, descriptionKeys) || vendor || null;
     const { amount, cashFlowType } = getAmountAndFlow(row, uploadType);
@@ -333,7 +382,7 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
 
     const missing: string[] = [];
     if (!hasLikelyTransactionSignal(row)) missing.push("거래행 아님");
-    if (!transactionDate) missing.push("거래일자");
+    if (!transactionDate) missing.push(detectedMonth ? "거래일자" : "거래일자/시트 기준월");
     if (!amount) missing.push("금액");
     if (!description) missing.push("적요/거래처");
 
@@ -385,6 +434,8 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
       rawData: row,
       normalizedData: {
         transaction_date: transactionDate,
+        sheet_name: sheetName,
+        detected_month: detectedMonth,
         account_id: firstPass.accountId || accountId,
         card_budget_group: cardBudgetGroup,
         vendor,
