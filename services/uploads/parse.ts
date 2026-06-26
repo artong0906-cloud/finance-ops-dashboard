@@ -21,7 +21,7 @@ type ParseUploadOptions = {
 function normalizeCell(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (value instanceof Date) return value.toISOString().slice(0, 10);
-  return String(value).replace(/\u00a0/g, " ").trim();
+  return String(value).normalize("NFC").replace(/\u00a0/g, " ").trim();
 }
 
 function normalizeHeader(value: unknown): string {
@@ -188,7 +188,8 @@ function looksLikeNonTransactionSummary(row: Record<string, string>) {
 
 function parseExcelSheet(workbook: XLSX.WorkBook, sheetName: string, fileName: string) {
   const sheet = workbook.Sheets[sheetName];
-  const detectedMonth = inferSingleMonthFromText(sheetName) || inferSingleMonthFromText(fileName);
+  const normalizedSheetName = normalizeCell(sheetName);
+  const detectedMonth = inferSingleMonthFromText(normalizedSheetName) || inferSingleMonthFromText(fileName);
   const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
     header: 1,
     defval: "",
@@ -211,7 +212,7 @@ function parseExcelSheet(workbook: XLSX.WorkBook, sheetName: string, fileName: s
     .filter((row) => !isEffectivelyEmpty(row))
     .filter((row) => !looksLikeNonTransactionSummary(row))
     .map((row) => ({
-      [uploadSheetNameKey]: sheetName,
+      [uploadSheetNameKey]: normalizedSheetName,
       [uploadDetectedMonthKey]: detectedMonth,
       ...row
     }));

@@ -101,7 +101,7 @@ const loanKeywords = [
 ];
 
 function compact(value: unknown) {
-  return String(value ?? "").replace(/\s+/g, "").toLowerCase();
+  return String(value ?? "").normalize("NFC").replace(/\s+/g, "").toLowerCase();
 }
 
 function includesAny(text: string, keywords: string[]) {
