@@ -3,9 +3,15 @@ import { revalidateTag } from "next/cache";
 import { getApiUser } from "@/lib/auth/api";
 import { canUpload } from "@/lib/auth/roles";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { normalizeUploadRows, type UploadType } from "@/services/uploads/normalize";
+import { inferMixedUploadType, normalizeUploadRows, type NormalizedUploadRow, type PersistedUploadType, type UploadType } from "@/services/uploads/normalize";
 
-const uploadTypes = ["bank", "card", "pharos", "balance"] as const;
+const uploadTypes = ["bank", "card", "pharos", "balance", "mixed"] as const;
+const persistedUploadTypeLabels: Record<PersistedUploadType, string> = {
+  bank: "은행",
+  card: "카드",
+  pharos: "파로스",
+  balance: "자산부채"
+};
 
 type UploadPayload = {
   uploadType?: UploadType;
@@ -13,6 +19,10 @@ type UploadPayload = {
   headers?: string[];
   rows?: Record<string, string>[];
 };
+
+function isPersistedUploadType(value: string): value is PersistedUploadType {
+  return value === "bank" || value === "card" || value === "pharos" || value === "balance";
+}
 
 function safeRows(rows: unknown) {
   if (!Array.isArray(rows)) return [];
@@ -212,6 +222,7 @@ export async function POST(request: NextRequest) {
   if (!canUpload(profileResult.profile.role)) {
     return NextResponse.json({ error: "업로드는 admin 또는 finance 권한만 가능합니다." }, { status: 403 });
   }
+  const profile = profileResult.profile;
 
   try {
     const body = (await request.json()) as UploadPayload;
@@ -229,103 +240,134 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = createAdminClient();
-    const { data: batch, error: batchError } = await admin
-      .from("upload_batches")
-      .insert({
-        upload_type: uploadType,
-        file_name: fileName,
-        status: "previewed",
-        uploaded_by: profileResult.profile.login_id || profileResult.profile.email
-      })
-      .select("id,upload_type,file_name,status,uploaded_at")
-      .single();
-
-    if (batchError) throw batchError;
-
     const normalizedRows = normalizeUploadRows(uploadType, rows);
     const hasRawRows = await tableExists(admin, "upload_raw_rows");
 
-    if (hasRawRows) {
-      const rawPayload = normalizedRows.map((row) => ({
-        upload_batch_id: batch.id,
-        row_index: row.rowIndex,
-        raw_data: row.rawData,
-        normalized_data: row.normalizedData,
-        parse_status: row.parseStatus,
-        memo: row.memo
-      }));
+    async function persistRows(batchUploadType: PersistedUploadType, batchFileName: string, groupRows: NormalizedUploadRow[]) {
+      const { data: batch, error: batchError } = await admin
+        .from("upload_batches")
+        .insert({
+          upload_type: batchUploadType,
+          file_name: batchFileName,
+          status: "previewed",
+          uploaded_by: profile.login_id || profile.email
+        })
+        .select("id,upload_type,file_name,status,uploaded_at")
+        .single();
 
-      for (let i = 0; i < rawPayload.length; i += 500) {
-        const { error } = await admin.from("upload_raw_rows").insert(rawPayload.slice(i, i + 500));
+      if (batchError) throw batchError;
+
+      if (hasRawRows) {
+        const rawPayload = groupRows.map((row) => ({
+          upload_batch_id: batch.id,
+          row_index: row.rowIndex,
+          raw_data: row.rawData,
+          normalized_data: row.normalizedData,
+          parse_status: row.parseStatus,
+          memo: row.memo
+        }));
+
+        for (let i = 0; i < rawPayload.length; i += 500) {
+          const { error } = await admin.from("upload_raw_rows").insert(rawPayload.slice(i, i + 500));
+          if (error) throw error;
+        }
+      }
+
+      const transactionRows = batchUploadType === "balance" ? [] : groupRows
+        .map((row) => row.transaction)
+        .filter((transaction): transaction is NonNullable<typeof transaction> => Boolean(transaction))
+        .map((transaction) => ({
+          upload_batch_id: batch.id,
+          transaction_date: transaction.transaction_date,
+          source: transaction.source,
+          business_unit: transaction.business_unit,
+          account_id: transaction.account_id,
+          card_budget_group: transaction.card_budget_group,
+          vendor: transaction.vendor,
+          description: transaction.description,
+          amount: transaction.amount,
+          cash_flow_type: transaction.cash_flow_type,
+          main_category: transaction.main_category,
+          sub_category: transaction.sub_category,
+          detail_category: transaction.detail_category,
+          talent_investment_type: transaction.talent_investment_type,
+          expense_basis: transaction.expense_basis,
+          is_internal_transfer: transaction.is_internal_transfer,
+          is_common_use: transaction.is_common_use,
+          common_policy: transaction.common_policy,
+          review_status: transaction.review_status,
+          memo: transaction.memo
+        }));
+      const balanceMovementRows = batchUploadType === "balance" ? groupRows
+        .map((row) => row.balanceMovement)
+        .filter((movement): movement is NonNullable<typeof movement> => Boolean(movement))
+        .map((movement) => ({
+          month: movement.month,
+          statement_type: movement.statement_type,
+          category: movement.category,
+          opening_amount: movement.opening_amount,
+          increase_amount: movement.increase_amount,
+          decrease_amount: movement.decrease_amount,
+          memo: movement.memo
+        })) : [];
+
+      for (let i = 0; i < transactionRows.length; i += 500) {
+        const { error } = await admin.from("transactions").insert(transactionRows.slice(i, i + 500));
         if (error) throw error;
       }
-    }
 
-    const transactionRows = uploadType === "balance" ? [] : normalizedRows
-      .map((row) => row.transaction)
-      .filter((transaction): transaction is NonNullable<typeof transaction> => Boolean(transaction))
-      .map((transaction) => ({
-        upload_batch_id: batch.id,
-        transaction_date: transaction.transaction_date,
-        source: transaction.source,
-        business_unit: transaction.business_unit,
-        account_id: transaction.account_id,
-        card_budget_group: transaction.card_budget_group,
-        vendor: transaction.vendor,
-        description: transaction.description,
-        amount: transaction.amount,
-        cash_flow_type: transaction.cash_flow_type,
-        main_category: transaction.main_category,
-        sub_category: transaction.sub_category,
-        detail_category: transaction.detail_category,
-        talent_investment_type: transaction.talent_investment_type,
-        expense_basis: transaction.expense_basis,
-        is_internal_transfer: transaction.is_internal_transfer,
-        is_common_use: transaction.is_common_use,
-        common_policy: transaction.common_policy,
-        review_status: transaction.review_status,
-        memo: transaction.memo
-      }));
-    const balanceMovementRows = uploadType === "balance" ? normalizedRows
-      .map((row) => row.balanceMovement)
-      .filter((movement): movement is NonNullable<typeof movement> => Boolean(movement))
-      .map((movement) => ({
-        month: movement.month,
-        statement_type: movement.statement_type,
-        category: movement.category,
-        opening_amount: movement.opening_amount,
-        increase_amount: movement.increase_amount,
-        decrease_amount: movement.decrease_amount,
-        memo: movement.memo
-      })) : [];
+      if (balanceMovementRows.length > 0) {
+        const months = Array.from(new Set(balanceMovementRows.map((row) => row.month)));
+        const { error: deleteError } = await admin
+          .from("balance_movements")
+          .delete()
+          .in("month", months);
+        if (deleteError) throw deleteError;
 
-    for (let i = 0; i < transactionRows.length; i += 500) {
-      const { error } = await admin.from("transactions").insert(transactionRows.slice(i, i + 500));
-      if (error) throw error;
-    }
-
-    if (balanceMovementRows.length > 0) {
-      const months = Array.from(new Set(balanceMovementRows.map((row) => row.month)));
-      const { error: deleteError } = await admin
-        .from("balance_movements")
-        .delete()
-        .in("month", months);
-      if (deleteError) throw deleteError;
-
-      for (let i = 0; i < balanceMovementRows.length; i += 500) {
-        const { error } = await admin.from("balance_movements").insert(balanceMovementRows.slice(i, i + 500));
-        if (error) throw error;
+        for (let i = 0; i < balanceMovementRows.length; i += 500) {
+          const { error } = await admin.from("balance_movements").insert(balanceMovementRows.slice(i, i + 500));
+          if (error) throw error;
+        }
       }
+
+      return {
+        batch,
+        rawRowCount: groupRows.length,
+        transactionCount: transactionRows.length,
+        balanceMovementCount: balanceMovementRows.length
+      };
     }
+
+    const persistResults = [];
+    if (uploadType === "mixed") {
+      const groupedRows = normalizedRows.reduce((groups, row) => {
+        const detectedType = String(row.normalizedData.detected_upload_type || inferMixedUploadType(row.rawData));
+        const groupType = isPersistedUploadType(detectedType) ? detectedType : "bank";
+        const current = groups.get(groupType) || [];
+        current.push(row);
+        groups.set(groupType, current);
+        return groups;
+      }, new Map<PersistedUploadType, NormalizedUploadRow[]>());
+
+      for (const [groupType, groupRows] of groupedRows.entries()) {
+        persistResults.push(await persistRows(groupType, `${fileName} :: ${persistedUploadTypeLabels[groupType]}`, groupRows));
+      }
+    } else {
+      persistResults.push(await persistRows(uploadType, fileName, normalizedRows));
+    }
+
+    const transactionCount = persistResults.reduce((sum, result) => sum + result.transactionCount, 0);
+    const balanceMovementCount = persistResults.reduce((sum, result) => sum + result.balanceMovementCount, 0);
 
     revalidateTag("dashboard-data", { expire: 0 });
 
     return NextResponse.json({
       ok: true,
-      batch,
+      batch: persistResults[0]?.batch,
+      batches: persistResults.map((result) => result.batch),
       rawRowCount: rows.length,
-      transactionCount: transactionRows.length,
-      balanceMovementCount: balanceMovementRows.length,
+      transactionCount,
+      balanceMovementCount,
       needReviewCount: normalizedRows.filter((row) => row.parseStatus !== "정상" || row.transaction?.review_status === "확인필요").length,
       rawRowsTableReady: hasRawRows
     });
