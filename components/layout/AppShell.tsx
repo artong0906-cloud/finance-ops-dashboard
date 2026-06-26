@@ -1,4 +1,3 @@
-import Link from "next/link";
 import {
   BarChart3,
   CreditCard,
@@ -46,7 +45,7 @@ export async function AppShell({
     <div className="min-h-screen bg-[var(--bg)] lg:grid lg:grid-cols-[244px_minmax(0,1fr)]">
       <aside className="border-r border-[#d8e0ec] bg-[linear-gradient(180deg,#f8fbff_0%,#eef4fb_50%,#f7f9fc_100%)] lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto max-lg:border-r-0 max-lg:border-b">
         <div className="flex h-full flex-col p-3">
-          <Link
+          <a
             href="/dashboard"
             className="group flex items-center gap-3 rounded-xl border border-white/80 bg-white/85 px-3 py-3 shadow-[0_12px_28px_rgba(47,95,158,.08)] transition hover:-translate-y-0.5 hover:border-[#c8d7ee] hover:bg-white"
           >
@@ -57,7 +56,7 @@ export async function AppShell({
               <span className="block truncate text-sm font-black text-[#13233b]">광고인 파이낸스OPS</span>
               <span className="mt-0.5 block truncate text-[11px] font-bold text-[#647896]">경영지원 대시보드</span>
             </span>
-          </Link>
+          </a>
 
           <div className="mt-4 rounded-xl border border-[#d9e5f4] bg-[linear-gradient(135deg,#ffffff_0%,#eef5ff_100%)] p-3 shadow-sm">
             <div className="flex items-center gap-3">
@@ -79,10 +78,9 @@ export async function AppShell({
               const Icon = item.icon;
               const active = activePath === item.href;
               return (
-                <Link
+                <a
                   key={item.href}
                   href={item.href}
-                  prefetch={true}
                   className={`group relative flex min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition max-lg:min-w-[150px] ${
                     active
                       ? "bg-[#2f5f9e] text-white shadow-[0_12px_24px_rgba(47,95,158,.18)]"
@@ -100,7 +98,7 @@ export async function AppShell({
                     <span className="block truncate">{item.label}</span>
                     <span className={`block text-[11px] font-bold ${active ? "text-white/65" : "text-[#8aa0b7]"}`}>{item.kicker}</span>
                   </span>
-                </Link>
+                </a>
               );
             })}
           </nav>
@@ -122,10 +120,10 @@ export async function AppShell({
                 </div>
               </div>
             </div>
-            <Link href="/auth/logout" className="btn w-full">
+            <a href="/auth/logout" className="btn w-full">
               <LogOut size={15} />
               로그아웃
-            </Link>
+            </a>
           </div>
         </div>
       </aside>
@@ -146,13 +144,13 @@ export async function AppShell({
                 <span className="h-2 w-2 rounded-full bg-emerald-500" />
                 운영
               </div>
-              <Link className="btn btn-soft" href="/dashboard">
+              <a className="btn btn-soft" href="/dashboard">
                 실데이터 보기
-              </Link>
-              <Link href="/auth/logout" className="btn lg:hidden">
+              </a>
+              <a href="/auth/logout" className="btn lg:hidden">
                 <LogOut size={15} />
                 로그아웃
-              </Link>
+              </a>
             </div>
           </div>
         </header>

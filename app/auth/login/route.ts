@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
   }
 
   const response = NextResponse.json({ ok: true, next });
+  response.headers.set("Cache-Control", "no-store, max-age=0");
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
