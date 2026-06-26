@@ -22,6 +22,14 @@ function hasSupabaseAuthCookie(request: NextRequest) {
     .some((cookie) => cookie.name.startsWith("sb-") && cookie.name.includes("auth-token") && Boolean(cookie.value));
 }
 
+function redirectToLogin(request: NextRequest, pathname: string) {
+  const redirectUrl = new URL("/login", request.url);
+  redirectUrl.searchParams.set("next", pathname);
+  const response = NextResponse.redirect(redirectUrl);
+  response.headers.set("Cache-Control", "no-store, max-age=0");
+  return response;
+}
+
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isProtected = protectedPrefixes.some((prefix) => pathname.startsWith(prefix));
@@ -33,13 +41,13 @@ export async function middleware(request: NextRequest) {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    return NextResponse.redirect(new URL("/login?error=missing-env", request.url));
+    const response = NextResponse.redirect(new URL("/login?error=missing-env", request.url));
+    response.headers.set("Cache-Control", "no-store, max-age=0");
+    return response;
   }
 
   if (!hasSupabaseAuthCookie(request)) {
-    const redirectUrl = new URL("/login", request.url);
-    redirectUrl.searchParams.set("next", pathname);
-    return NextResponse.redirect(redirectUrl);
+    return redirectToLogin(request, pathname);
   }
 
   return NextResponse.next();

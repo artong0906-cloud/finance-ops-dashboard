@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 export function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
@@ -31,7 +30,7 @@ export function LoginForm() {
         throw new Error(String(result.error || "아이디 또는 비밀번호가 맞지 않습니다."));
       }
 
-      router.replace(String(result.next || next));
+      window.location.assign(String(result.next || next));
     } catch (err) {
       const message = err instanceof Error ? err.message : "로그인 중 오류가 발생했습니다.";
       setError(message);
