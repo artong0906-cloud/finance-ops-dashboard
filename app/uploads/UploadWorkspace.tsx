@@ -18,6 +18,7 @@ type UploadBatch = {
 };
 
 const uploadTypeOptions: { value: UploadType; label: string; desc: string }[] = [
+  { value: "mixed", label: "통합 로우데이터", desc: "한 엑셀 안의 은행·카드·자산부채 시트를 자동 분리" },
   { value: "bank", label: "은행 입출금", desc: "기업은행, 플랫폼 통장, 하나/신한/한투 입출금" },
   { value: "card", label: "카드 사용내역", desc: "매입신용카드, 법인카드 승인내역" },
   { value: "pharos", label: "파로스 분개", desc: "파로스 일일분개, 사업부 확정 기준" },
@@ -60,7 +61,7 @@ async function getAuthHeaders(includeJson = false) {
 }
 
 export function UploadWorkspace() {
-  const [uploadType, setUploadType] = useState<UploadType>("bank");
+  const [uploadType, setUploadType] = useState<UploadType>("mixed");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<UploadPreview | null>(null);
   const [batches, setBatches] = useState<UploadBatch[]>([]);
@@ -83,9 +84,7 @@ export function UploadWorkspace() {
       rawRows: preview.rowCount,
       okRows: normalized.filter((row) => row.parseStatus === "정상").length,
       reviewRows: normalized.filter((row) => row.parseStatus !== "정상").length,
-      transactionRows: uploadType === "balance"
-        ? normalized.filter((row) => row.balanceMovement).length
-        : normalized.filter((row) => row.transaction).length
+      transactionRows: normalized.filter((row) => row.transaction || row.balanceMovement).length
     };
   }, [preview, uploadType]);
 
@@ -120,7 +119,7 @@ export function UploadWorkspace() {
 
     setIsParsing(true);
     try {
-      const parsed = await parseUploadFile(file);
+      const parsed = await parseUploadFile(file, { allSheets: uploadType === "mixed" });
       if (parsed.rowCount === 0) throw new Error("파일에서 읽을 수 있는 행이 없습니다.");
       setPreview(parsed);
       setMessage(`미리보기 생성 완료: ${parsed.rowCount.toLocaleString("ko-KR")}행을 읽었습니다.`);
@@ -156,9 +155,15 @@ export function UploadWorkspace() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "업로드 저장에 실패했습니다.");
-      const savedCount = uploadType === "balance" ? result.balanceMovementCount || 0 : result.transactionCount || 0;
-      const savedLabel = uploadType === "balance" ? "자산·부채 증감" : "거래";
-      setMessage(`저장 완료: 원본 ${result.rawRowCount.toLocaleString("ko-KR")}행 / ${savedLabel} ${savedCount.toLocaleString("ko-KR")}건 생성 / 확인필요 ${result.needReviewCount.toLocaleString("ko-KR")}건`);
+      const transactionCount = result.transactionCount || 0;
+      const balanceMovementCount = result.balanceMovementCount || 0;
+      const batchCount = Array.isArray(result.batches) ? result.batches.length : 1;
+      setMessage(
+        `저장 완료: 원본 ${result.rawRowCount.toLocaleString("ko-KR")}행 / 거래 ${transactionCount.toLocaleString("ko-KR")}건` +
+        (balanceMovementCount ? ` / 자산·부채 ${balanceMovementCount.toLocaleString("ko-KR")}건` : "") +
+        ` 생성 / 확인필요 ${result.needReviewCount.toLocaleString("ko-KR")}건` +
+        (uploadType === "mixed" ? ` / ${batchCount.toLocaleString("ko-KR")}개 유형으로 자동 분리` : "")
+      );
       setPreview(null);
       setFile(null);
       const input = document.getElementById("upload-file-input") as HTMLInputElement | null;
@@ -216,7 +221,7 @@ export function UploadWorkspace() {
           <div className="flex items-start justify-between gap-4 max-md:flex-col">
             <div>
               <h2 className="section-title">파일 업로드</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-500">CSV, XLSX, XLS 파일을 읽어 원본 행을 저장하고 1차 거래 데이터로 변환합니다. 확정 전까지는 모두 검토대기 상태로 둡니다.</p>
+              <p className="mt-2 text-sm leading-6 text-slate-500">CSV, XLSX, XLS 파일을 읽어 원본 행을 저장하고 1차 거래 데이터로 변환합니다. 통합 로우데이터는 여러 시트를 읽어 유형별로 자동 분리합니다.</p>
             </div>
             <span className="badge badge-warning">v4 MVP</span>
           </div>
@@ -233,7 +238,7 @@ export function UploadWorkspace() {
             <label className="grid gap-2 text-sm font-bold text-slate-700">
               파일 선택
               <input id="upload-file-input" className="field" type="file" accept=".csv,.xlsx,.xls" onChange={(event) => setFile(event.target.files?.[0] || null)} />
-              <span className="text-xs font-medium text-slate-500">1회 업로드 최대 5,000행 기준으로 먼저 운영합니다.</span>
+              <span className="text-xs font-medium text-slate-500">통합 로우데이터는 시트명/원천/컬럼명 기준으로 은행·카드를 감지합니다.</span>
             </label>
           </div>
 
@@ -280,7 +285,7 @@ export function UploadWorkspace() {
           <div className="card"><div className="eyebrow">원본 행</div><div className="metric-value mt-2">{stats.rawRows.toLocaleString("ko-KR")}</div></div>
           <div className="card"><div className="eyebrow">자동 인식 정상</div><div className="metric-value mt-2 text-emerald-700">{stats.okRows.toLocaleString("ko-KR")}</div></div>
           <div className="card"><div className="eyebrow">확인 필요</div><div className="metric-value mt-2 text-amber-700">{stats.reviewRows.toLocaleString("ko-KR")}</div></div>
-          <div className="card"><div className="eyebrow">{uploadType === "balance" ? "증감 생성 예정" : "거래 생성 예정"}</div><div className="metric-value mt-2 text-blue-700">{stats.transactionRows.toLocaleString("ko-KR")}</div></div>
+          <div className="card"><div className="eyebrow">{uploadType === "balance" ? "증감 생성 예정" : uploadType === "mixed" ? "거래/증감 생성 예정" : "거래 생성 예정"}</div><div className="metric-value mt-2 text-blue-700">{stats.transactionRows.toLocaleString("ko-KR")}</div></div>
         </section>
       ) : null}
 
@@ -289,7 +294,7 @@ export function UploadWorkspace() {
           <div className="flex items-start justify-between gap-4 max-md:flex-col">
             <div>
               <h2 className="section-title">미리보기</h2>
-              <p className="mt-2 text-sm text-slate-500">{preview.fileName} · {preview.rowCount.toLocaleString("ko-KR")}행 · {preview.headers.length}개 컬럼</p>
+              <p className="mt-2 text-sm text-slate-500">{preview.fileName} · {preview.rowCount.toLocaleString("ko-KR")}행 · {preview.headers.length}개 컬럼{preview.sheetName ? ` · ${preview.sheetName}` : ""}</p>
             </div>
             <span className="badge">{typeLabel(uploadType)}</span>
           </div>

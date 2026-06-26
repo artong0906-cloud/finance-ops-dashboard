@@ -11,6 +11,12 @@ export type UploadPreview = {
   sheetName?: string;
 };
 
+export const uploadSheetNameKey = "__sheetName";
+
+type ParseUploadOptions = {
+  allSheets?: boolean;
+};
+
 function normalizeCell(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (value instanceof Date) return value.toISOString().slice(0, 10);
@@ -158,12 +164,8 @@ function looksLikeNonTransactionSummary(row: Record<string, string>) {
   return hasSummaryMarker && !hasTransactionSignal;
 }
 
-function parseExcel(buffer: ArrayBuffer, fileName: string): UploadPreview {
-  const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
-  const firstSheetName = workbook.SheetNames[0];
-  if (!firstSheetName) throw new Error("엑셀 파일에서 시트를 찾지 못했습니다.");
-
-  const sheet = workbook.Sheets[firstSheetName];
+function parseExcelSheet(workbook: XLSX.WorkBook, sheetName: string) {
+  const sheet = workbook.Sheets[sheetName];
   const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
     header: 1,
     defval: "",
@@ -173,7 +175,7 @@ function parseExcel(buffer: ArrayBuffer, fileName: string): UploadPreview {
 
   const nonEmptyMatrix = matrix.filter((row) => row.some((cell) => cell.trim()));
   if (nonEmptyMatrix.length === 0) {
-    return { fileName, rowCount: 0, headers: [], rows: [], sampleRows: [], sheetName: firstSheetName };
+    return { headers: [], rows: [], detectedHeaderRow: undefined };
   }
 
   const headerRowIndex = findHeaderRowIndex(nonEmptyMatrix);
@@ -184,20 +186,45 @@ function parseExcel(buffer: ArrayBuffer, fileName: string): UploadPreview {
     .slice(headerRowIndex + 1)
     .map((row) => rowToObject(row.slice(0, maxColumns), headers))
     .filter((row) => !isEffectivelyEmpty(row))
-    .filter((row) => !looksLikeNonTransactionSummary(row));
+    .filter((row) => !looksLikeNonTransactionSummary(row))
+    .map((row) => ({ [uploadSheetNameKey]: sheetName, ...row }));
+
+  return {
+    headers: [uploadSheetNameKey, ...headers],
+    rows,
+    detectedHeaderRow: headerRowIndex + 1
+  };
+}
+
+function parseExcel(buffer: ArrayBuffer, fileName: string, options: ParseUploadOptions = {}): UploadPreview {
+  const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+  const sheetNames = options.allSheets ? workbook.SheetNames : workbook.SheetNames.slice(0, 1);
+  if (sheetNames.length === 0) throw new Error("엑셀 파일에서 시트를 찾지 못했습니다.");
+
+  const parsedSheets = sheetNames
+    .map((sheetName) => ({ sheetName, ...parseExcelSheet(workbook, sheetName) }))
+    .filter((sheet) => sheet.rows.length > 0);
+
+  if (parsedSheets.length === 0) {
+    return { fileName, rowCount: 0, headers: [], rows: [], sampleRows: [], sheetName: sheetNames[0] };
+  }
+
+  const rows = parsedSheets.flatMap((sheet) => sheet.rows);
+  const headerSet = new Set<string>();
+  parsedSheets.forEach((sheet) => sheet.headers.forEach((header) => headerSet.add(header)));
 
   return {
     fileName,
     rowCount: rows.length,
-    headers,
+    headers: Array.from(headerSet),
     rows,
     sampleRows: rows.slice(0, 10),
-    detectedHeaderRow: headerRowIndex + 1,
-    sheetName: firstSheetName
+    detectedHeaderRow: parsedSheets[0]?.detectedHeaderRow,
+    sheetName: options.allSheets ? parsedSheets.map((sheet) => sheet.sheetName).join(", ") : parsedSheets[0]?.sheetName
   };
 }
 
-export async function parseUploadFile(file: File): Promise<UploadPreview> {
+export async function parseUploadFile(file: File, options: ParseUploadOptions = {}): Promise<UploadPreview> {
   const extension = file.name.split(".").pop()?.toLowerCase();
 
   if (extension === "csv") {
@@ -207,7 +234,7 @@ export async function parseUploadFile(file: File): Promise<UploadPreview> {
 
   if (["xlsx", "xls"].includes(extension || "")) {
     const buffer = await file.arrayBuffer();
-    return parseExcel(buffer, file.name);
+    return parseExcel(buffer, file.name, options);
   }
 
   throw new Error("지원하지 않는 파일 형식입니다. CSV, XLSX, XLS 파일만 업로드할 수 있습니다.");
