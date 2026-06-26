@@ -48,6 +48,45 @@ const accountRules: { keywords: string[]; accountId: string; businessUnit: Busin
   { keywords: ["BANK_COMMON_001", "100037330273", "한국투자", "한투", "신한"], accountId: "BANK_COMMON_001", businessUnit: "공통사용분" }
 ];
 
+const governmentIncomeKeywords = [
+  "정부지원금",
+  "고용노동부",
+  "고용부",
+  "지원금",
+  "훈련비",
+  "식대",
+  "보조금",
+  "장려금",
+  "고용센터",
+  "산업인력공단",
+  "한국산업인력공단",
+  "hrd"
+];
+const miscIncomeKeywords = [
+  "영업외수익",
+  "이자수익",
+  "환급",
+  "매출취소",
+  "대여금상환",
+  "급여착오지급반환",
+  "착오지급반환",
+  "캐시백",
+  "조수인"
+];
+const loanKeywords = [
+  "단기차입금",
+  "장기차입금",
+  "대출금",
+  "차입",
+  "대출상환",
+  "대출실행",
+  "대출금입금",
+  "대출금 입금",
+  "신규대출",
+  "차입금입금",
+  "차입금 입금"
+];
+
 function compact(value: unknown) {
   return String(value ?? "").replace(/\s+/g, "").toLowerCase();
 }
@@ -157,29 +196,44 @@ export function classifyFirstPass(input: FirstPassInput): FirstPassResult {
       confidence: 0.9,
       matchedRule: "cash-transfer-or-card-payment"
     });
+  } else if (cashFlowType === "입금" && includesAny(text, governmentIncomeKeywords)) {
+    apply({
+      businessUnit: result.businessUnit === "미배분" ? "공통사용분" : result.businessUnit,
+      mainCategory: "영업외수익",
+      subCategory: "정부지원금",
+      detailCategory: originalMain === "미분류" ? "정부지원금 입금" : originalMain,
+      expenseBasis: "해당없음",
+      reviewStatus: "정상",
+      confidence: 0.86,
+      matchedRule: "bank-government-income"
+    });
+  } else if (cashFlowType === "입금" && includesAny(text, miscIncomeKeywords)) {
+    apply({
+      businessUnit: result.businessUnit === "미배분" ? "공통사용분" : result.businessUnit,
+      mainCategory: "영업외수익",
+      subCategory: "기타수익",
+      detailCategory: originalMain === "미분류" ? "기타 입금" : originalMain,
+      expenseBasis: "해당없음",
+      reviewStatus: "정상",
+      confidence: 0.84,
+      matchedRule: "bank-misc-income"
+    });
   } else if (cashFlowType === "입금" && includesAny(text, ["외상매출금", "광고매출", "매출", "광고주"])) {
     apply({
-      businessUnit: result.businessUnit === "미배분" ? "광고사업부" : result.businessUnit,
+      businessUnit: result.businessUnit === "미배분" || result.businessUnit === "공통사용분" ? "광고사업부" : result.businessUnit,
       mainCategory: "매출",
-      subCategory: includesAny(text, ["플랫폼"]) ? "플랫폼 매출" : "광고 매출",
+      subCategory: includesAny(text, ["플랫폼"]) || result.businessUnit === "플랫폼"
+        ? "플랫폼 매출"
+        : result.businessUnit === "대외협력" || includesAny(text, ["대외협력"])
+          ? "대외협력부 매출"
+          : "광고사업부 매출",
       detailCategory: originalMain === "미분류" ? "입금 매출" : originalMain,
       expenseBasis: "해당없음",
       reviewStatus: "정상",
       confidence: 0.88,
       matchedRule: "bank-sales-deposit"
     });
-  } else if (cashFlowType === "입금" && includesAny(text, ["정부지원금", "영업외수익", "이자수익", "환급"])) {
-    apply({
-      businessUnit: result.businessUnit === "미배분" ? "공통사용분" : result.businessUnit,
-      mainCategory: "영업외수익",
-      subCategory: includesAny(text, ["정부지원금"]) ? "정부지원금" : "기타수익",
-      detailCategory: originalMain === "미분류" ? "입금 수익" : originalMain,
-      expenseBasis: "해당없음",
-      reviewStatus: "정상",
-      confidence: 0.82,
-      matchedRule: "bank-non-operating-income"
-    });
-  } else if (includesAny(text, ["단기차입금", "장기차입금", "대출금", "차입", "대출상환"])) {
+  } else if (includesAny(text, loanKeywords)) {
     apply({
       businessUnit: result.businessUnit === "미배분" ? "공통사용분" : result.businessUnit,
       mainCategory: "부채",
@@ -189,6 +243,24 @@ export function classifyFirstPass(input: FirstPassInput): FirstPassResult {
       reviewStatus: "정상",
       confidence: 0.86,
       matchedRule: "loan-principal"
+    });
+  } else if (source === "은행" && cashFlowType === "입금") {
+    apply({
+      businessUnit: result.businessUnit === "플랫폼" || result.businessUnit === "대외협력" ? result.businessUnit : "광고사업부",
+      mainCategory: "매출",
+      subCategory: result.businessUnit === "플랫폼"
+        ? "플랫폼 매출"
+        : result.businessUnit === "대외협력"
+          ? "대외협력부 매출"
+          : "광고사업부 매출",
+      detailCategory: originalMain === "미분류" ? "통장 입금 매출" : originalMain,
+      expenseBasis: "해당없음",
+      isInternalTransfer: false,
+      isCommonUse: false,
+      commonPolicy: undefined,
+      reviewStatus: "정상",
+      confidence: 0.78,
+      matchedRule: "bank-deposit-default-revenue"
     });
   } else if (includesAny(text, ["대출이자비용", "이자비용"])) {
     apply({

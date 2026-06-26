@@ -20,7 +20,13 @@ const governmentSupportKeywords = [
   "고용부",
   "지원금",
   "훈련비",
-  "식대"
+  "식대",
+  "보조금",
+  "장려금",
+  "고용센터",
+  "산업인력공단",
+  "한국산업인력공단",
+  "hrd"
 ];
 const miscKeywords = [
   "환급",
@@ -30,9 +36,10 @@ const miscKeywords = [
   "착오지급반환",
   "캐시백",
   "조수인",
-  "영업외수익"
+  "영업외수익",
+  "이자수익"
 ];
-const loanExecutionKeywords = ["대출실행", "대출금입금", "대출금 입금", "신규대출", "차입금입금", "차입금 입금"];
+const loanExecutionKeywords = ["대출실행", "대출금입금", "대출금 입금", "신규대출", "차입금입금", "차입금 입금", "단기차입금", "장기차입금", "차입"];
 
 type RevenueCategory = (typeof revenueCategories)[number];
 type RevenueFilter = typeof allFilter | RevenueCategory;
@@ -60,6 +67,10 @@ function rowText(row: Transaction) {
   return normalizeText([
     row.vendor,
     row.description,
+    row.source,
+    row.businessUnit,
+    row.accountId,
+    row.accountName,
     row.mainCategory,
     row.subCategory,
     row.detailCategory,
@@ -102,7 +113,7 @@ function classifyRevenue(row: Transaction): Pick<RevenueRow, "category" | "rule"
 
   return {
     category: "광고사업부 매출",
-    rule: "5월 임시 기준: 통장 입금 기본값"
+    rule: "통장 입금 기본값: 광고사업부 매출"
   };
 }
 
@@ -137,7 +148,7 @@ function percent(part: number, total: number) {
 }
 
 function ruleCaption(category: RevenueCategory) {
-  if (category === "광고사업부 매출") return "5월 통장 입금 기본 산정";
+  if (category === "광고사업부 매출") return "통장 입금 기본 산정";
   if (category === "정부지원금") return "고용노동부·지원금·훈련비·식대";
   if (category === "기타매출") return "환급·매출취소·상환·영업외수익";
   return "6월부터 분리 기준 적용 예정";
@@ -186,7 +197,7 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
   return (
     <AppShell
       title="매출 분석"
-      description="5월 통장 입금내역을 기준으로 매출을 광고사업부, 대외협력부, 플랫폼, 정부지원금, 기타매출로 시뮬레이션합니다."
+      description="선택 월 통장 입금내역을 기준으로 매출을 광고사업부, 대외협력부, 플랫폼, 정부지원금, 기타매출로 시뮬레이션합니다."
       periodLabel={currentMonth}
       availableMonths={data.availableMonths}
       activePath="/revenue"

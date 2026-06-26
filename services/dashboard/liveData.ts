@@ -308,7 +308,9 @@ function toTransaction(row: DbTransaction, cardIssuerLookup?: Map<string, string
     reviewStatus: row.review_status,
     memo: row.memo
   });
-  const useFirstPass = row.business_unit === "미배분"
+  const shouldReclassifyBankDeposit = row.source === "은행" && row.cash_flow_type === "입금";
+  const useFirstPass = shouldReclassifyBankDeposit
+    || row.business_unit === "미배분"
     || row.review_status === "확인필요"
     || !row.detail_category
     || !row.expense_basis;

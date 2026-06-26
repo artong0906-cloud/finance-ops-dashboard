@@ -60,9 +60,13 @@ const incomeKeys = ["입금", "입금액", "입금금액", "입금 금액", "수
 const outcomeKeys = ["출금", "출금액", "출금금액", "출금 금액", "지출", "차변"];
 const businessUnitKeys = ["사업부", "사업단위", "귀속사업부", "부서", "business_unit"];
 const cardBudgetGroupKeys = ["카드사", "카드회사", "카드명", "카드구분", "카드사/사용자", "card_budget_group"];
+const cardSignalKeys = ["카드사", "카드회사", "카드명", "카드구분", "카드사/사용자", "카드번호", "승인번호", "승인구분", "card_budget_group"];
+const bankAccountKeys = ["계좌", "계좌번호", "입금계좌", "출금계좌", "통장", "은행", "account_id"];
+const bankBalanceKeys = ["잔액", "거래후잔액", "거래 후 잔액", "현재잔액", "balance"];
+const cashFlowHintKeys = ["입출금", "입지급", "거래구분", "구분", "현금흐름", "cash_flow_type"];
 const mainCategoryKeys = ["대분류", "분류", "계정과목", "계정", "main_category"];
 const subCategoryKeys = ["중분류", "소분류", "세부분류", "sub_category"];
-const sourceHintKeys = ["__sheetName", "자료유형", "자료 구분", "원천", "출처", "source", "업로드유형", "데이터구분", "구분"];
+const sourceHintKeys = ["__sheetName", "자료유형", "자료 구분", "원천", "출처", "source", "업로드유형", "데이터구분"];
 
 function compact(value: string) {
   return String(value || "").replace(/\s/g, "").toLowerCase();
@@ -93,17 +97,33 @@ function hasHeader(row: Record<string, string>, keys: string[]) {
   return keys.some((key) => headerText.includes(compact(key)));
 }
 
+function hasValue(row: Record<string, string>, keys: string[]) {
+  return Boolean(String(pick(row, keys) || "").trim());
+}
+
+function hasAmountValue(row: Record<string, string>, keys: string[]) {
+  return Math.abs(parseAmount(pick(row, keys))) > 0;
+}
+
 export function inferMixedUploadType(row: Record<string, string>): PersistedUploadType {
   const sourceHint = compact(pick(row, sourceHintKeys));
+  const hasBankAmount = hasAmountValue(row, incomeKeys) || hasAmountValue(row, outcomeKeys);
+  const hasBankValue = hasBankAmount || hasValue(row, bankBalanceKeys) || hasValue(row, bankAccountKeys);
+  const hasCardValue = hasValue(row, cardSignalKeys);
+  const hasBalanceValue = hasValue(row, statementTypeKeys) && hasValue(row, balanceCategoryKeys);
+
+  if (hasBalanceValue) return "balance";
+  if (hasBankValue) return "bank";
+  if (hasCardValue) return "card";
 
   if (sourceHint.includes("자산") || sourceHint.includes("부채") || sourceHint.includes("balance")) return "balance";
   if (sourceHint.includes("파로스") || sourceHint.includes("분개") || sourceHint.includes("pharos")) return "pharos";
   if (sourceHint.includes("카드") || sourceHint.includes("card")) return "card";
   if (sourceHint.includes("은행") || sourceHint.includes("통장") || sourceHint.includes("입출금") || sourceHint.includes("bank")) return "bank";
-
-  if (hasHeader(row, ["승인일자", "이용일자", "사용일자", "가맹점명", "카드사", "카드명", "카드사/사용자"])) return "card";
+  if (sourceHint.includes("입금") || sourceHint.includes("출금") || sourceHint.includes("입지급")) return "bank";
   if (hasHeader(row, ["기초금액", "전월잔액", "당월증가", "당월감소", "자산부채구분", "statement_type"])) return "balance";
-  if (hasHeader(row, ["전표일자", "차변", "대변", "분개"])) return "pharos";
+  if (hasHeader(row, ["전표일자", "분개"]) && (hasAmountValue(row, ["차변"]) || hasAmountValue(row, ["대변"]))) return "pharos";
+  if (hasHeader(row, ["승인일자", "이용일자", "사용일자", "가맹점명", "카드사", "카드명", "카드사/사용자"])) return "card";
 
   return "bank";
 }
@@ -200,6 +220,7 @@ function hasLikelyTransactionSignal(row: Record<string, string>) {
 function getAmountAndFlow(row: Record<string, string>, uploadType: UploadType) {
   const income = parseAmount(pick(row, incomeKeys));
   const outcome = parseAmount(pick(row, outcomeKeys));
+  const flowHint = compact(pick(row, cashFlowHintKeys));
 
   if (income > 0 || outcome > 0) {
     if (income >= outcome && income > 0) return { amount: income, cashFlowType: "입금" as const };
@@ -209,6 +230,8 @@ function getAmountAndFlow(row: Record<string, string>, uploadType: UploadType) {
   const amount = parseAmount(pick(row, amountKeys));
   if (uploadType === "card") return { amount: Math.abs(amount), cashFlowType: "출금" as const };
   if (amount < 0) return { amount: Math.abs(amount), cashFlowType: "출금" as const };
+  if (flowHint.includes("출금") || flowHint.includes("지급") || flowHint === "출") return { amount: Math.abs(amount), cashFlowType: "출금" as const };
+  if (flowHint.includes("입금") || flowHint.includes("수입") || flowHint === "입") return { amount: Math.abs(amount), cashFlowType: "입금" as const };
   return { amount: Math.abs(amount), cashFlowType: amount >= 0 ? ("입금" as const) : ("출금" as const) };
 }
 
@@ -303,6 +326,7 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
     const description = pick(row, descriptionKeys) || vendor || null;
     const { amount, cashFlowType } = getAmountAndFlow(row, uploadType);
     const businessUnit = normalizeBusinessUnit(pick(row, businessUnitKeys));
+    const accountId = uploadType === "bank" ? pick(row, bankAccountKeys) || null : null;
     const cardBudgetGroup = uploadType === "card" ? pick(row, cardBudgetGroupKeys) || null : null;
     const mainCategory = pick(row, mainCategoryKeys) || null;
     const subCategory = pick(row, subCategoryKeys) || null;
@@ -319,6 +343,7 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
     const firstPass = classifyFirstPass({
       source,
       businessUnit,
+      accountId,
       cardBudgetGroup,
       vendor,
       description,
@@ -336,7 +361,7 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
           transaction_date: transactionDate,
           source,
           business_unit: firstPass.businessUnit,
-          account_id: firstPass.accountId || null,
+          account_id: firstPass.accountId || accountId,
           card_budget_group: cardBudgetGroup,
           vendor,
           description,
@@ -360,6 +385,7 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
       rawData: row,
       normalizedData: {
         transaction_date: transactionDate,
+        account_id: firstPass.accountId || accountId,
         card_budget_group: cardBudgetGroup,
         vendor,
         description,
