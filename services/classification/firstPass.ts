@@ -87,17 +87,39 @@ const miscIncomeKeywords = [
   "조수인"
 ];
 const loanKeywords = [
+  "대출",
   "단기차입금",
   "장기차입금",
   "대출금",
   "차입",
   "대출상환",
   "대출실행",
+  "대출입금",
   "대출금입금",
   "대출금 입금",
   "신규대출",
   "차입금입금",
-  "차입금 입금"
+  "차입금 입금",
+  "중진공",
+  "기술보증",
+  "기보",
+  "보증대출"
+];
+const internalTransferKeywords = [
+  "보통예금",
+  "현금출금",
+  "증권계좌입출금",
+  "카드미지급비용",
+  "카드대금",
+  "타사이체출금",
+  "타사이체입금",
+  "광고인하나은행",
+  "광고인신한은행",
+  "광고인기업은행",
+  "광고인cma",
+  "주식회사광고인",
+  "(주)광고인",
+  "하나은행퇴직연금예치"
 ];
 
 function compact(value: unknown) {
@@ -238,7 +260,7 @@ export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserM
     });
   };
 
-  if (includesAny(text, ["보통예금", "현금출금", "증권계좌입출금", "카드미지급비용", "카드대금", "타사이체출금"])) {
+  if (includesAny(text, internalTransferKeywords)) {
     apply({
       businessUnit: result.businessUnit === "미배분" ? "공통사용분" : result.businessUnit,
       mainCategory: includesAny(text, ["카드미지급비용", "카드대금"]) ? "카드대금" : "계좌이체",
@@ -250,6 +272,17 @@ export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserM
       reviewStatus: "정상",
       confidence: 0.9,
       matchedRule: "cash-transfer-or-card-payment"
+    });
+  } else if (cashFlowType === "입금" && includesAny(text, loanKeywords)) {
+    apply({
+      businessUnit: result.businessUnit === "미배분" ? "공통사용분" : result.businessUnit,
+      mainCategory: "부채",
+      subCategory: "차입금",
+      detailCategory: originalMain,
+      expenseBasis: "해당없음",
+      reviewStatus: "정상",
+      confidence: 0.86,
+      matchedRule: "loan-principal"
     });
   } else if (cashFlowType === "입금" && includesAny(text, governmentIncomeKeywords)) {
     apply({
@@ -288,17 +321,6 @@ export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserM
       confidence: 0.88,
       matchedRule: "bank-sales-deposit"
     });
-  } else if (includesAny(text, loanKeywords)) {
-    apply({
-      businessUnit: result.businessUnit === "미배분" ? "공통사용분" : result.businessUnit,
-      mainCategory: "부채",
-      subCategory: "차입금",
-      detailCategory: originalMain,
-      expenseBasis: "해당없음",
-      reviewStatus: "정상",
-      confidence: 0.86,
-      matchedRule: "loan-principal"
-    });
   } else if (source === "은행" && cashFlowType === "입금") {
     apply({
       businessUnit: result.businessUnit === "플랫폼" || result.businessUnit === "대외협력" ? result.businessUnit : "광고사업부",
@@ -329,6 +351,17 @@ export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserM
       reviewStatus: "정상",
       confidence: 0.86,
       matchedRule: "loan-interest"
+    });
+  } else if (includesAny(text, loanKeywords)) {
+    apply({
+      businessUnit: result.businessUnit === "미배분" ? "공통사용분" : result.businessUnit,
+      mainCategory: "부채",
+      subCategory: "차입금",
+      detailCategory: originalMain,
+      expenseBasis: "해당없음",
+      reviewStatus: "정상",
+      confidence: 0.84,
+      matchedRule: "loan-principal"
     });
   } else if (includesAny(text, ["광고선전비", "광고비", "메조", "매체", "리워드광고", "네이버광고", "카카오광고"])) {
     apply({
