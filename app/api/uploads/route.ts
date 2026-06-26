@@ -75,6 +75,12 @@ function normalizeMonthValue(value: unknown) {
   return `${match[1]}-${match[2].padStart(2, "0")}`;
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object") return JSON.stringify(error);
+  return fallback;
+}
+
 function inferRawRowMonth(row: { raw_data?: Record<string, unknown> | null; normalized_data?: Record<string, unknown> | null }) {
   const normalized = row.normalized_data || {};
   const raw = row.raw_data || {};
@@ -235,6 +241,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "업로드는 admin 또는 finance 권한만 가능합니다." }, { status: 403 });
   }
   const profile = profileResult.profile;
+  const createdBatchIds: string[] = [];
+  let adminForRollback: ReturnType<typeof createAdminClient> | null = null;
 
   try {
     const body = (await request.json()) as UploadPayload;
@@ -252,6 +260,7 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = createAdminClient();
+    adminForRollback = admin;
     const mappingRules = await fetchActiveMappingRules(admin);
     const normalizedRows = normalizeUploadRows(uploadType, rows, mappingRules);
     const hasRawRows = await tableExists(admin, "upload_raw_rows");
@@ -269,6 +278,7 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (batchError) throw batchError;
+      createdBatchIds.push(batch.id);
 
       if (hasRawRows) {
         const rawPayload = groupRows.map((row) => ({
@@ -385,7 +395,18 @@ export async function POST(request: NextRequest) {
       rawRowsTableReady: hasRawRows
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "업로드 저장 중 오류가 발생했습니다.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    if (adminForRollback && createdBatchIds.length > 0) {
+      try {
+        await adminForRollback.from("transactions").delete().in("upload_batch_id", createdBatchIds);
+        await adminForRollback.from("upload_raw_rows").delete().in("upload_batch_id", createdBatchIds);
+        await adminForRollback.from("upload_batches").delete().in("id", createdBatchIds);
+        revalidateTag("dashboard-data", { expire: 0 });
+      } catch {
+        // Best-effort cleanup. The returned error below still tells the user the upload did not complete.
+      }
+    }
+
+    const message = getErrorMessage(error, "업로드 저장 중 오류가 발생했습니다.");
+    return NextResponse.json({ error: `업로드 저장 중 오류가 발생했습니다. ${message}` }, { status: 500 });
   }
 }

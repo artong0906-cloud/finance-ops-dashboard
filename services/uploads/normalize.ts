@@ -72,7 +72,7 @@ const sourceHintKeys = ["__sheetName", "자료유형", "자료 구분", "원천"
 const knownBankAccountIds = new Set(["BANK_AD_001", "BANK_PLATFORM_001", "BANK_PARTNER_001", "BANK_COMMON_001"]);
 
 function compact(value: string) {
-  return String(value || "").replace(/\s/g, "").toLowerCase();
+  return String(value || "").normalize("NFC").replace(/\s/g, "").toLowerCase();
 }
 
 function inferMonthFromText(value: string) {
