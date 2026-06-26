@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FileSearch, RefreshCw, Save, Trash2, UploadCloud } from "lucide-react";
+import { Download, FileSearch, RefreshCw, Save, Trash2, UploadCloud, Wand2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { parseUploadFile, type UploadPreview } from "@/services/uploads/parse";
 import { normalizeUploadRows, type UploadType } from "@/services/uploads/normalize";
+import type { Transaction } from "@/types/finance";
 
 type UploadBatch = {
   id: string;
@@ -16,6 +17,8 @@ type UploadBatch = {
   rawRowCount: number;
   transactionCount: number;
 };
+
+type RuleReviewRow = Pick<Transaction, "id" | "date" | "source" | "businessUnit" | "vendor" | "description" | "amount" | "cashFlowType" | "mainCategory" | "subCategory" | "detailCategory" | "expenseBasis" | "reviewStatus">;
 
 const uploadTypeOptions: { value: UploadType; label: string; desc: string }[] = [
   { value: "mixed", label: "통합 로우데이터", desc: "한 엑셀 안의 은행·카드·자산부채 시트를 자동 분리" },
@@ -35,6 +38,56 @@ function formatDateTime(value: string) {
   } catch {
     return value;
   }
+}
+
+function csvCell(value: unknown) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function buildRuleKeyword(row: RuleReviewRow) {
+  const parts = [row.vendor, row.description]
+    .map((value) => String(value || "").trim())
+    .filter((value) => value && value !== "-")
+    .slice(0, 2);
+
+  return parts.length > 0 ? parts.join("+") : [row.source, row.mainCategory, row.subCategory].filter(Boolean).join("+");
+}
+
+function buildReviewRuleCsv(rows: RuleReviewRow[]) {
+  const headers = [
+    "거래ID",
+    "일자",
+    "원천",
+    "거래처",
+    "적요",
+    "금액",
+    "현금흐름",
+    "기준키워드",
+    "사업부",
+    "대분류",
+    "중분류",
+    "세부항목",
+    "비용구분",
+    "우선순위"
+  ];
+  const body = rows.map((row) => [
+    row.id,
+    row.date,
+    row.source,
+    row.vendor,
+    row.description,
+    row.amount,
+    row.cashFlowType,
+    buildRuleKeyword(row),
+    row.businessUnit === "미배분" ? "" : row.businessUnit,
+    row.mainCategory === "미분류" ? "" : row.mainCategory,
+    row.subCategory === "미분류" ? "" : row.subCategory,
+    row.detailCategory === "미분류" ? "" : row.detailCategory,
+    row.expenseBasis === "해당없음" ? "" : row.expenseBasis,
+    10
+  ]);
+
+  return `\ufeff${[headers, ...body].map((line) => line.map(csvCell).join(",")).join("\r\n")}`;
 }
 
 async function getAccessToken() {
@@ -60,13 +113,15 @@ async function getAuthHeaders(includeJson = false) {
   return headers;
 }
 
-export function UploadWorkspace() {
+export function UploadWorkspace({ reviewRows = [] }: { reviewRows?: RuleReviewRow[] }) {
   const [uploadType, setUploadType] = useState<UploadType>("mixed");
   const [file, setFile] = useState<File | null>(null);
+  const [ruleFile, setRuleFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<UploadPreview | null>(null);
   const [batches, setBatches] = useState<UploadBatch[]>([]);
   const [isParsing, setIsParsing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isImportingRules, setIsImportingRules] = useState(false);
   const [isLoadingBatches, setIsLoadingBatches] = useState(false);
   const [deletingBatchId, setDeletingBatchId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
@@ -214,6 +269,64 @@ export function UploadWorkspace() {
     }
   }
 
+  function handleDownloadReviewRules() {
+    setMessage("");
+    setError("");
+
+    if (reviewRows.length === 0) {
+      setError("다운로드할 확인필요 거래가 없습니다.");
+      return;
+    }
+
+    const csv = buildReviewRuleCsv(reviewRows);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `financeops-review-rules-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setMessage(`확인필요 ${reviewRows.length.toLocaleString("ko-KR")}건 기준 CSV를 다운로드했습니다.`);
+  }
+
+  async function handleImportRules() {
+    setMessage("");
+    setError("");
+
+    if (!ruleFile) {
+      setError("반영할 기준 CSV 파일을 선택해 주세요.");
+      return;
+    }
+
+    setIsImportingRules(true);
+    try {
+      const csvText = await ruleFile.text();
+      const headers = await getAuthHeaders(true);
+      const response = await fetch("/api/mapping-rules", {
+        method: "POST",
+        headers,
+        credentials: "include",
+        body: JSON.stringify({ csvText })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "기준 반영에 실패했습니다.");
+
+      setMessage(
+        `기준 반영 완료: 새 기준 ${Number(result.importedCount || 0).toLocaleString("ko-KR")}개 저장 / 기존 거래 ${Number(result.updatedCount || 0).toLocaleString("ko-KR")}건 재분류`
+      );
+      setRuleFile(null);
+      const input = document.getElementById("rule-file-input") as HTMLInputElement | null;
+      if (input) input.value = "";
+      await loadBatches();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "기준 반영 중 오류가 발생했습니다.");
+    } finally {
+      setIsImportingRules(false);
+    }
+  }
+
   return (
     <div className="grid gap-6">
       <section className="grid grid-cols-[minmax(0,1fr)_330px] gap-5 max-xl:grid-cols-1">
@@ -288,6 +401,47 @@ export function UploadWorkspace() {
           <div className="card"><div className="eyebrow">{uploadType === "balance" ? "증감 생성 예정" : uploadType === "mixed" ? "거래/증감 생성 예정" : "거래 생성 예정"}</div><div className="metric-value mt-2 text-blue-700">{stats.transactionRows.toLocaleString("ko-KR")}</div></div>
         </section>
       ) : null}
+
+      <section className="grid grid-cols-[minmax(0,1fr)_330px] gap-5 max-xl:grid-cols-1">
+        <div className="card">
+          <div className="flex items-start justify-between gap-4 max-md:flex-col">
+            <div>
+              <h2 className="section-title">확인필요 기준 반영</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                확인필요 거래만 CSV로 내려받아 기준키워드와 분류값을 입력한 뒤 다시 올리면, 같은 키워드가 포함된 기존/향후 거래에 계속 적용됩니다.
+              </p>
+            </div>
+            <span className="badge badge-muted">{reviewRows.length.toLocaleString("ko-KR")}건</span>
+          </div>
+
+          <div className="mt-5 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3 max-md:grid-cols-1">
+            <button className="btn" onClick={handleDownloadReviewRules} type="button">
+              <Download size={15} />
+              확인필요 CSV 다운로드
+            </button>
+            <input
+              id="rule-file-input"
+              className="field"
+              type="file"
+              accept=".csv"
+              onChange={(event) => setRuleFile(event.target.files?.[0] || null)}
+            />
+            <button className="btn btn-primary" onClick={handleImportRules} disabled={isImportingRules || !ruleFile} type="button">
+              <Wand2 size={15} />
+              {isImportingRules ? "기준 반영 중..." : "기준 CSV 반영"}
+            </button>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="eyebrow">작성 방법</div>
+          <div className="mt-3 grid gap-2 text-xs leading-5 text-slate-600">
+            <p><b>기준키워드</b>는 같은 거래를 찾는 핵심값입니다. 기본값은 거래처+적요로 내려갑니다.</p>
+            <p><b>사업부/대분류/중분류/세부항목/비용구분</b> 중 필요한 값만 입력해도 됩니다.</p>
+            <p>여러 단어를 모두 포함해야 하면 <b>키워드1+키워드2</b>, 둘 중 하나면 <b>키워드1|키워드2</b>로 입력합니다.</p>
+          </div>
+        </div>
+      </section>
 
       {preview ? (
         <section className="card">

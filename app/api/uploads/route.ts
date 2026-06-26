@@ -3,6 +3,7 @@ import { revalidateTag } from "next/cache";
 import { getApiUser } from "@/lib/auth/api";
 import { canUpload } from "@/lib/auth/roles";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { UserMappingRule } from "@/services/classification/firstPass";
 import { inferMixedUploadType, normalizeUploadRows, type NormalizedUploadRow, type PersistedUploadType, type UploadType } from "@/services/uploads/normalize";
 
 const uploadTypes = ["bank", "card", "pharos", "balance", "mixed"] as const;
@@ -51,6 +52,17 @@ async function countRows(admin: any, tableName: string, columnName: string, valu
 
   if (error) return 0;
   return count || 0;
+}
+
+async function fetchActiveMappingRules(admin: any) {
+  const { data, error } = await admin
+    .from("mapping_rules")
+    .select("rule_name,source,keyword,business_unit,main_category,sub_category,detail_category,expense_basis,priority,created_at")
+    .eq("is_active", true)
+    .order("priority", { ascending: true })
+    .order("created_at", { ascending: false });
+
+  return error ? [] : (data || []) as UserMappingRule[];
 }
 
 function normalizeMonthValue(value: unknown) {
@@ -240,7 +252,8 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = createAdminClient();
-    const normalizedRows = normalizeUploadRows(uploadType, rows);
+    const mappingRules = await fetchActiveMappingRules(admin);
+    const normalizedRows = normalizeUploadRows(uploadType, rows, mappingRules);
     const hasRawRows = await tableExists(admin, "upload_raw_rows");
 
     async function persistRows(batchUploadType: PersistedUploadType, batchFileName: string, groupRows: NormalizedUploadRow[]) {
