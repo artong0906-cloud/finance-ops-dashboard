@@ -454,9 +454,10 @@ export function ExpenseAnalysisClient({
   const detailFilteredRows = useMemo(() => activeCategory === "운영비" && activeOperating !== allOperatingFilter
     ? categoryFilteredRows.filter((item) => item.operatingType === activeOperating)
     : talentFilteredRows, [activeCategory, activeOperating, categoryFilteredRows, talentFilteredRows]);
+  const activeTalentLabel = activeTalentCode ? talentLabelByCode[activeTalentCode] : undefined;
   const strictTalentRows = useMemo(() => activeCategory === "인재투자" && activeTalentCode
-    ? detailFilteredRows.filter((item) => getResolvedTalentCode(item) === activeTalentCode)
-    : detailFilteredRows, [activeCategory, activeTalentCode, detailFilteredRows]);
+    ? detailFilteredRows.filter((item) => getResolvedTalentCode(item) === activeTalentCode && item.categoryDetail === activeTalentLabel)
+    : detailFilteredRows, [activeCategory, activeTalentCode, activeTalentLabel, detailFilteredRows]);
   const canFilterByCardUser = activeCategory === "인재투자";
   const cardUserSummaries = useMemo(() => canFilterByCardUser ? buildCardUserSummaries(strictTalentRows) : [], [canFilterByCardUser, strictTalentRows]);
   const activeCardUser = canFilterByCardUser ? resolveActiveCardUser(selectedCardUser, cardUserSummaries) : allCardUserFilter;
@@ -464,7 +465,10 @@ export function ExpenseAnalysisClient({
   const filteredRows = useMemo(() => !canFilterByCardUser || activeCardUser === allCardUserFilter
     ? strictTalentRows
     : strictTalentRows.filter((item) => item.cardUser === activeCardUser), [activeCardUser, canFilterByCardUser, strictTalentRows]);
-  const filteredTotal = useMemo(() => sumResolvedAmount(filteredRows), [filteredRows]);
+  const finalDetailRows = useMemo(() => activeCategory === "인재투자" && activeTalentCode
+    ? filteredRows.filter((item) => getResolvedTalentCode(item) === activeTalentCode && item.categoryDetail === activeTalentLabel)
+    : filteredRows, [activeCategory, activeTalentCode, activeTalentLabel, filteredRows]);
+  const filteredTotal = useMemo(() => sumResolvedAmount(finalDetailRows), [finalDetailRows]);
   const categorySummaries = useMemo(() => buildSummaries(categoryLabels, resolvedRows, (item) => item.category), [resolvedRows]);
   const talentSummaries = useMemo(() => buildSummaries(talentLabels, resolvedRows.filter((item) => item.category === "인재투자"), (item) => item.talentType), [resolvedRows]);
   const operatingSummaries = useMemo(() => buildSummaries(operatingLabels, resolvedRows.filter((item) => item.category === "운영비"), (item) => item.operatingType), [resolvedRows]);
@@ -561,7 +565,7 @@ export function ExpenseAnalysisClient({
             <div className="flex flex-wrap items-center justify-end gap-2 max-lg:justify-start">
               <span className="badge">{activeCategory}</span>
               <span className="badge badge-muted">{formatKRW(filteredTotal)}</span>
-              <span className="badge badge-muted">{filteredRows.length.toLocaleString("ko-KR")}건</span>
+              <span className="badge badge-muted">{finalDetailRows.length.toLocaleString("ko-KR")}건</span>
               <button className="btn btn-sm" onClick={() => applyFilters({ category: allCategoryFilter })} type="button">
                 전체 지출 보기
               </button>
@@ -688,7 +692,7 @@ export function ExpenseAnalysisClient({
               {activeCategory === allCategoryFilter ? "전체 지출" : activeCategory}
               {activeCategory === "인재투자" && activeTalent !== allTalentFilter ? ` · ${activeTalent}` : ""}
               {activeCategory === "운영비" && activeOperating !== allOperatingFilter ? ` · ${activeOperating}` : ""}
-              {canFilterByCardUser ? ` 중 ${activeCardUser} 기준` : " 기준"} {filteredRows.length.toLocaleString("ko-KR")}건을 표시합니다.
+              {canFilterByCardUser ? ` 중 ${activeCardUser} 기준` : " 기준"} {finalDetailRows.length.toLocaleString("ko-KR")}건을 표시합니다.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -751,7 +755,7 @@ export function ExpenseAnalysisClient({
           </details>
         </div> : null}
 
-        {filteredRows.length > 0 ? (
+        {finalDetailRows.length > 0 ? (
           <div className="table-wrap">
             <table>
               <thead>
@@ -772,8 +776,8 @@ export function ExpenseAnalysisClient({
                 </tr>
               </thead>
               <tbody>
-                {filteredRows.map(({ row, category, categoryDetail, cardUser }) => (
-                  <tr key={row.id}>
+                {finalDetailRows.map(({ row, category, categoryDetail, cardUser }, index) => (
+                  <tr key={`${activeCategory}-${activeTalent}-${activeCardUser}-${row.id}-${index}`}>
                     <td>{row.date}</td>
                     <td><span className="badge">{category}</span></td>
                     <td><span className="badge badge-muted">{categoryDetail}</span></td>
