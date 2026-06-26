@@ -58,7 +58,7 @@ const accountRules: { keywords: string[]; accountId: string; businessUnit: Busin
   { keywords: ["BANK_PLATFORM_001", "19013209204016", "기업은행(플랫폼)", "기업(190", "190~", "190132"], accountId: "BANK_PLATFORM_001", businessUnit: "플랫폼" },
   { keywords: ["BANK_PARTNER_001", "12691002911604", "12691002745704", "하나은행", "하나,", "11604", "45704"], accountId: "BANK_PARTNER_001", businessUnit: "대외협력" },
   { keywords: ["BANK_COMMON_001", "100037330273", "한국투자", "한투", "신한"], accountId: "BANK_COMMON_001", businessUnit: "공통사용분" },
-  { keywords: ["BANK_AD_001", "29812261804018", "기업은행", "기업(298", "298~", "298122"], accountId: "BANK_AD_001", businessUnit: "광고사업부" }
+  { keywords: ["BANK_AD_001", "29812261804018", "기업은행", "기업 입출금", "기업입출금", "기업(298", "298~", "298122"], accountId: "BANK_AD_001", businessUnit: "광고사업부" }
 ];
 
 const governmentIncomeKeywords = [
