@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { chartColors, RankBar } from "@/components/shared/FinanceViz";
 import { formatKRW } from "@/services/dashboard/calculations";
 import type { Transaction } from "@/types/finance";
@@ -24,6 +24,7 @@ const highlightCardStyles = [
 type ExpenseCategory = typeof allCategoryFilter | (typeof categoryLabels)[number];
 type TalentFilter = typeof allTalentFilter | (typeof talentLabels)[number];
 type OperatingFilter = typeof allOperatingFilter | (typeof operatingLabels)[number];
+type TalentCode = "1" | "2" | "3" | "4" | "5" | "6";
 
 type Summary = {
   label: string;
@@ -42,9 +43,19 @@ type ResolvedExpenseRow = {
   row: Transaction;
   category: (typeof categoryLabels)[number];
   categoryDetail: string;
+  talentCode?: TalentCode;
   talentType?: (typeof talentLabels)[number];
   operatingType?: (typeof operatingLabels)[number];
   cardUser: string;
+};
+
+const talentLabelByCode: Record<TalentCode, (typeof talentLabels)[number]> = {
+  "1": "인투1 집",
+  "2": "인투2 차",
+  "3": "인투3 밥",
+  "4": "인투4 돈",
+  "5": "인투5 성장",
+  "6": "인투6 환경"
 };
 
 function sumResolvedAmount(rows: ResolvedExpenseRow[]) {
@@ -91,6 +102,56 @@ function includesAny(text: string, keywords: string[]) {
   return keywords.some((keyword) => text.includes(normalizeText(keyword)));
 }
 
+function talentCodeFromText(value: string | undefined): TalentCode | undefined {
+  const text = normalizeText(value);
+  if (!text) return undefined;
+
+  if (includesAny(text, ["인투1", "투자1", "인재투자1", "인투집", "투자집"])) return "1";
+  if (includesAny(text, ["인투2", "투자2", "인재투자2", "인투차", "투자차"])) return "2";
+  if (includesAny(text, ["인투3", "투자3", "인재투자3", "인투밥", "투자밥"])) return "3";
+  if (includesAny(text, ["인투4", "투자4", "인재투자4", "인투돈", "투자돈", "인투몸", "투자몸"])) return "4";
+  if (includesAny(text, ["인투5", "투자5", "인재투자5", "인투성장", "투자성장"])) return "5";
+  if (includesAny(text, ["인투6", "투자6", "인재투자6", "인투환경", "투자환경"])) return "6";
+
+  return undefined;
+}
+
+function fallbackTalentCodeFromText(value: string | undefined): TalentCode | undefined {
+  const text = normalizeText(value);
+  if (!text) return undefined;
+
+  if (includesAny(text, ["사택", "월세", "지급임차료"])) return "1";
+  if (includesAny(text, ["법인차량", "차량", "리스료", "주유", "주차", "통행료"])) return "2";
+  if (includesAny(text, ["식대", "간식", "커피", "카페", "편의점"])) return "3";
+  if (includesAny(text, ["복지포인트", "내일채움", "일자리공제", "4대보험", "보험료"])) return "4";
+  if (includesAny(text, ["교육", "출장", "숙박", "플랫폼", "openai", "gemini", "kling", "ai"])) return "5";
+  if (includesAny(text, ["사무용품", "소모품", "통신비", "공과금", "전력비", "인터넷", "정수기", "보안"])) return "6";
+
+  return undefined;
+}
+
+function resolveTalentCode(row: Transaction): TalentCode | undefined {
+  const structuredText = [
+    row.talentInvestmentType,
+    row.subCategory,
+    row.detailCategory,
+    row.mainCategory
+  ].filter(Boolean).join(" ");
+  const explicitText = [
+    row.talentInvestmentType,
+    row.subCategory,
+    row.detailCategory,
+    row.mainCategory,
+    row.description,
+    row.memo
+  ].filter(Boolean).join(" ");
+
+  return talentCodeFromText(structuredText)
+    || talentCodeFromText(explicitText)
+    || fallbackTalentCodeFromText(structuredText)
+    || fallbackTalentCodeFromText(explicitText);
+}
+
 function hasExplicitTalentMarker(row: Transaction) {
   const text = normalizeText([
     row.mainCategory,
@@ -124,29 +185,8 @@ function hasExplicitTalentMarker(row: Transaction) {
 }
 
 function resolveTalentType(row: Transaction): (typeof talentLabels)[number] | undefined {
-  const categoryText = normalizeText([
-    row.talentInvestmentType,
-    row.mainCategory,
-    row.subCategory,
-    row.detailCategory
-  ].filter(Boolean).join(" "));
-  const explicitText = rowText(row);
-
-  if (includesAny(categoryText, ["인투1", "투자1", "인재투자1", "인투집", "투자집", "사택", "월세", "지급임차료"])) return "인투1 집";
-  if (includesAny(categoryText, ["인투2", "투자2", "인재투자2", "인투차", "투자차", "법인차량", "차량", "리스료", "주유", "주차", "통행료"])) return "인투2 차";
-  if (includesAny(categoryText, ["인투3", "투자3", "인재투자3", "인투밥", "투자밥", "식대", "간식", "커피", "카페", "편의점"])) return "인투3 밥";
-  if (includesAny(categoryText, ["인투4", "투자4", "인재투자4", "인투돈", "투자돈", "인투몸", "투자몸", "복지포인트", "내일채움", "일자리공제", "4대보험", "보험료"])) return "인투4 돈";
-  if (includesAny(categoryText, ["인투5", "투자5", "인재투자5", "인투성장", "투자성장", "교육", "출장", "숙박", "플랫폼", "openai", "gemini", "kling", "ai"])) return "인투5 성장";
-  if (includesAny(categoryText, ["인투6", "투자6", "인재투자6", "인투환경", "투자환경", "사무용품", "소모품", "통신비", "공과금", "전력비", "인터넷", "정수기", "보안"])) return "인투6 환경";
-
-  if (includesAny(explicitText, ["인투1", "투자1", "인재투자1", "인투집", "투자집"])) return "인투1 집";
-  if (includesAny(explicitText, ["인투2", "투자2", "인재투자2", "인투차", "투자차"])) return "인투2 차";
-  if (includesAny(explicitText, ["인투3", "투자3", "인재투자3", "인투밥", "투자밥"])) return "인투3 밥";
-  if (includesAny(explicitText, ["인투4", "투자4", "인재투자4", "인투돈", "투자돈", "인투몸", "투자몸"])) return "인투4 돈";
-  if (includesAny(explicitText, ["인투5", "투자5", "인재투자5", "인투성장", "투자성장"])) return "인투5 성장";
-  if (includesAny(explicitText, ["인투6", "투자6", "인재투자6", "인투환경", "투자환경"])) return "인투6 환경";
-
-  return undefined;
+  const code = resolveTalentCode(row);
+  return code ? talentLabelByCode[code] : undefined;
 }
 
 function resolveCategory(row: Transaction, talentType?: (typeof talentLabels)[number]) {
@@ -279,6 +319,10 @@ function resolveActiveCardUser(value: string | undefined, summaries: CardUserSum
   return matched?.label || allCardUserFilter;
 }
 
+function resolveTalentFilterCode(value: TalentFilter): TalentCode | undefined {
+  return value === allTalentFilter ? undefined : talentCodeFromText(value);
+}
+
 function splitTalentLabel(label: string) {
   const [code, ...rest] = label.split(" ");
   return {
@@ -365,10 +409,19 @@ export function ExpenseAnalysisClient({
   const [selectedOperating, setSelectedOperating] = useState<OperatingFilter>(() => resolveActiveOperating(activeOperatingValue));
   const [selectedCardUser, setSelectedCardUser] = useState(() => activeCardUserValue || allCardUserFilter);
 
+  useEffect(() => {
+    setSelectedCategory(resolveActiveCategory(activeCategoryValue, activeTalentValue));
+    setSelectedTalent(resolveActiveTalent(activeTalentValue));
+    setSelectedOperating(resolveActiveOperating(activeOperatingValue));
+    setSelectedCardUser(activeCardUserValue || allCardUserFilter);
+  }, [activeCardUserValue, activeCategoryValue, activeOperatingValue, activeTalentValue]);
+
   const activeCategory = selectedCategory;
   const activeTalent = activeCategory === "인재투자" ? selectedTalent : allTalentFilter;
+  const activeTalentCode = activeCategory === "인재투자" ? resolveTalentFilterCode(activeTalent) : undefined;
   const activeOperating = activeCategory === "운영비" ? selectedOperating : allOperatingFilter;
   const resolvedRows: ResolvedExpenseRow[] = useMemo(() => expenseRows.map((row) => {
+    const talentCode = resolveTalentCode(row);
     const talentType = resolveTalentType(row);
     const { category, detail } = resolveCategory(row, talentType);
     const operatingType = category === "운영비"
@@ -379,6 +432,7 @@ export function ExpenseAnalysisClient({
       row,
       category,
       categoryDetail: detail,
+      talentCode,
       talentType,
       operatingType,
       cardUser: resolveCardUser(row)
@@ -389,8 +443,8 @@ export function ExpenseAnalysisClient({
     ? resolvedRows
     : resolvedRows.filter((item) => item.category === activeCategory), [activeCategory, resolvedRows]);
   const talentFilteredRows = useMemo(() => activeCategory === "인재투자" && activeTalent !== allTalentFilter
-    ? categoryFilteredRows.filter((item) => item.talentType === activeTalent)
-    : categoryFilteredRows, [activeCategory, activeTalent, categoryFilteredRows]);
+    ? categoryFilteredRows.filter((item) => item.talentCode === activeTalentCode)
+    : categoryFilteredRows, [activeCategory, activeTalent, activeTalentCode, categoryFilteredRows]);
   const detailFilteredRows = useMemo(() => activeCategory === "운영비" && activeOperating !== allOperatingFilter
     ? categoryFilteredRows.filter((item) => item.operatingType === activeOperating)
     : talentFilteredRows, [activeCategory, activeOperating, categoryFilteredRows, talentFilteredRows]);
