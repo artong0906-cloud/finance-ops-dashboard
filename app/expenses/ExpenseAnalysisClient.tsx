@@ -323,6 +323,12 @@ function resolveTalentFilterCode(value: TalentFilter): TalentCode | undefined {
   return value === allTalentFilter ? undefined : talentCodeFromText(value);
 }
 
+function getResolvedTalentCode(item: ResolvedExpenseRow) {
+  return talentCodeFromText(item.categoryDetail)
+    || talentCodeFromText(item.talentType)
+    || item.talentCode;
+}
+
 function splitTalentLabel(label: string) {
   const [code, ...rest] = label.split(" ");
   return {
@@ -443,18 +449,21 @@ export function ExpenseAnalysisClient({
     ? resolvedRows
     : resolvedRows.filter((item) => item.category === activeCategory), [activeCategory, resolvedRows]);
   const talentFilteredRows = useMemo(() => activeCategory === "인재투자" && activeTalent !== allTalentFilter
-    ? categoryFilteredRows.filter((item) => item.talentCode === activeTalentCode)
+    ? categoryFilteredRows.filter((item) => getResolvedTalentCode(item) === activeTalentCode)
     : categoryFilteredRows, [activeCategory, activeTalent, activeTalentCode, categoryFilteredRows]);
   const detailFilteredRows = useMemo(() => activeCategory === "운영비" && activeOperating !== allOperatingFilter
     ? categoryFilteredRows.filter((item) => item.operatingType === activeOperating)
     : talentFilteredRows, [activeCategory, activeOperating, categoryFilteredRows, talentFilteredRows]);
+  const strictTalentRows = useMemo(() => activeCategory === "인재투자" && activeTalentCode
+    ? detailFilteredRows.filter((item) => getResolvedTalentCode(item) === activeTalentCode)
+    : detailFilteredRows, [activeCategory, activeTalentCode, detailFilteredRows]);
   const canFilterByCardUser = activeCategory === "인재투자";
-  const cardUserSummaries = useMemo(() => canFilterByCardUser ? buildCardUserSummaries(detailFilteredRows) : [], [canFilterByCardUser, detailFilteredRows]);
+  const cardUserSummaries = useMemo(() => canFilterByCardUser ? buildCardUserSummaries(strictTalentRows) : [], [canFilterByCardUser, strictTalentRows]);
   const activeCardUser = canFilterByCardUser ? resolveActiveCardUser(selectedCardUser, cardUserSummaries) : allCardUserFilter;
   const isCardUserFiltered = canFilterByCardUser && activeCardUser !== allCardUserFilter;
   const filteredRows = useMemo(() => !canFilterByCardUser || activeCardUser === allCardUserFilter
-    ? detailFilteredRows
-    : detailFilteredRows.filter((item) => item.cardUser === activeCardUser), [activeCardUser, canFilterByCardUser, detailFilteredRows]);
+    ? strictTalentRows
+    : strictTalentRows.filter((item) => item.cardUser === activeCardUser), [activeCardUser, canFilterByCardUser, strictTalentRows]);
   const filteredTotal = useMemo(() => sumResolvedAmount(filteredRows), [filteredRows]);
   const categorySummaries = useMemo(() => buildSummaries(categoryLabels, resolvedRows, (item) => item.category), [resolvedRows]);
   const talentSummaries = useMemo(() => buildSummaries(talentLabels, resolvedRows.filter((item) => item.category === "인재투자"), (item) => item.talentType), [resolvedRows]);
@@ -707,7 +716,7 @@ export function ExpenseAnalysisClient({
               onClick={() => applyFilters({ category: "인재투자", talent: activeTalent, cardUser: allCardUserFilter })}
               type="button"
             >
-              전체 카드사 {detailFilteredRows.length.toLocaleString("ko-KR")}건
+              전체 카드사 {strictTalentRows.length.toLocaleString("ko-KR")}건
             </button>
           </div>
 
