@@ -4,6 +4,7 @@ import { getApiUser } from "@/lib/auth/api";
 import { canUpload } from "@/lib/auth/roles";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { UserMappingRule } from "@/services/classification/firstPass";
+import { parseUploadFile } from "@/services/uploads/parse";
 import { inferMixedUploadType, normalizeUploadRows, type NormalizedUploadRow, type PersistedUploadType, type UploadType } from "@/services/uploads/normalize";
 
 const uploadTypes = ["bank", "card", "pharos", "balance", "mixed"] as const;
@@ -18,7 +19,7 @@ type UploadPayload = {
   uploadType?: UploadType;
   fileName?: string;
   headers?: string[];
-  rows?: Record<string, string>[];
+  rows?: unknown;
 };
 
 function isPersistedUploadType(value: string): value is PersistedUploadType {
@@ -33,10 +34,35 @@ function safeRows(rows: unknown) {
     .map((row) => {
       const cleaned: Record<string, string> = {};
       Object.entries(row).forEach(([key, value]) => {
-        cleaned[String(key)] = value === null || value === undefined ? "" : String(value);
+        cleaned[String(key).normalize("NFC")] = value === null || value === undefined
+          ? ""
+          : String(value).normalize("NFC").replace(/\u00a0/g, " ").trim();
       });
       return cleaned;
     });
+}
+
+async function readUploadRequest(request: NextRequest): Promise<UploadPayload> {
+  const contentType = request.headers.get("content-type") || "";
+  if (contentType.toLowerCase().includes("multipart/form-data")) {
+    const formData = await request.formData();
+    const uploadType = String(formData.get("uploadType") || "") as UploadType;
+    const file = formData.get("file");
+
+    if (!(file instanceof File)) {
+      return { uploadType, fileName: "", rows: [] };
+    }
+
+    const parsed = await parseUploadFile(file, { allSheets: uploadType === "mixed" });
+    return {
+      uploadType,
+      fileName: parsed.fileName || file.name,
+      headers: parsed.headers,
+      rows: parsed.rows
+    };
+  }
+
+  return (await request.json()) as UploadPayload;
 }
 
 async function tableExists(admin: any, tableName: string) {
@@ -245,7 +271,7 @@ export async function POST(request: NextRequest) {
   let adminForRollback: ReturnType<typeof createAdminClient> | null = null;
 
   try {
-    const body = (await request.json()) as UploadPayload;
+    const body = await readUploadRequest(request);
     const uploadType = body.uploadType;
     const fileName = String(body.fileName || "").trim();
     const rows = safeRows(body.rows);

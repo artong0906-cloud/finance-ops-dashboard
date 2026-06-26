@@ -193,20 +193,23 @@ export function UploadWorkspace({ reviewRows = [] }: { reviewRows?: RuleReviewRo
       setError("먼저 미리보기를 생성하세요.");
       return;
     }
+    if (!file) {
+      setError("저장할 원본 파일을 다시 선택해 주세요.");
+      return;
+    }
 
     setIsSaving(true);
     try {
-      const headers = await getAuthHeaders(true);
+      const formData = new FormData();
+      formData.append("uploadType", uploadType);
+      formData.append("file", file);
+
+      const headers = await getAuthHeaders(false);
       const response = await fetch("/api/uploads", {
         method: "POST",
         headers,
         credentials: "include",
-        body: JSON.stringify({
-          uploadType,
-          fileName: preview.fileName,
-          headers: preview.headers,
-          rows: preview.rows
-        })
+        body: formData
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "업로드 저장에 실패했습니다.");
