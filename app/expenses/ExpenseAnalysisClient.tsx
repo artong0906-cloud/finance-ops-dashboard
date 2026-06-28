@@ -7,6 +7,7 @@ import { formatKRW } from "@/services/dashboard/calculations";
 import type { Transaction } from "@/types/finance";
 
 const categoryLabels = ["인재투자", "환불", "급여", "광고비", "세금", "운영비", "기타"] as const;
+const editableCategoryLabels = [...categoryLabels, "통장간 이동"] as const;
 const talentLabels = ["인투1 집", "인투2 차", "인투3 밥", "인투4 돈", "인투5 성장", "인투6 환경"] as const;
 const allCategoryFilter = "전체";
 const allTalentFilter = "전체 인재투자";
@@ -23,6 +24,7 @@ const highlightCardStyles = [
 ];
 
 type ExpenseCategory = typeof allCategoryFilter | (typeof categoryLabels)[number];
+type EditableExpenseCategory = (typeof editableCategoryLabels)[number];
 type TalentFilter = typeof allTalentFilter | (typeof talentLabels)[number];
 type OperatingFilter = typeof allOperatingFilter | (typeof operatingLabels)[number];
 type TalentCode = "1" | "2" | "3" | "4" | "5" | "6";
@@ -190,7 +192,7 @@ function resolveTalentType(row: Transaction): (typeof talentLabels)[number] | un
   return code ? talentLabelByCode[code] : undefined;
 }
 
-function editableDetailOptions(category: (typeof categoryLabels)[number]) {
+function editableDetailOptions(category: EditableExpenseCategory) {
   if (category === "인재투자") return [...talentLabels];
   if (category === "운영비") return [...operatingLabels];
   return [];
@@ -482,7 +484,7 @@ export function ExpenseAnalysisClient({
   const [selectedOperating, setSelectedOperating] = useState<OperatingFilter>(() => resolveActiveOperating(activeOperatingValue));
   const [selectedCardUser, setSelectedCardUser] = useState(() => activeCardUserValue || allCardUserFilter);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [editCategory, setEditCategory] = useState<(typeof categoryLabels)[number]>("인재투자");
+  const [editCategory, setEditCategory] = useState<EditableExpenseCategory>("인재투자");
   const [editDetail, setEditDetail] = useState<string>("인투1 집");
   const [isSavingCategory, setIsSavingCategory] = useState(false);
   const [categoryMessage, setCategoryMessage] = useState<string | null>(null);
@@ -909,8 +911,8 @@ export function ExpenseAnalysisClient({
             </div>
             <label className="grid gap-2 text-sm font-bold text-slate-700">
               지출유형
-              <select className="field" value={editCategory} onChange={(event) => setEditCategory(event.target.value as (typeof categoryLabels)[number])}>
-                {categoryLabels.map((label) => (
+              <select className="field" value={editCategory} onChange={(event) => setEditCategory(event.target.value as EditableExpenseCategory)}>
+                {editableCategoryLabels.map((label) => (
                   <option key={label} value={label}>{label}</option>
                 ))}
               </select>
