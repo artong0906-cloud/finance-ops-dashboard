@@ -55,10 +55,10 @@ export type UserMappingRule = {
 const units: BusinessUnitValue[] = ["광고사업부", "플랫폼", "대외협력", "공통사용분", "미배분"];
 
 const accountRules: { keywords: string[]; accountId: string; businessUnit: BusinessUnitValue }[] = [
-  { keywords: ["BANK_PLATFORM_001", "19013209204016", "기업은행(플랫폼)", "기업(190", "190~", "190132"], accountId: "BANK_PLATFORM_001", businessUnit: "플랫폼" },
-  { keywords: ["BANK_PARTNER_001", "12691002911604", "12691002745704", "하나은행", "하나,", "11604", "45704"], accountId: "BANK_PARTNER_001", businessUnit: "대외협력" },
-  { keywords: ["BANK_COMMON_001", "100037330273", "한국투자", "한투", "신한"], accountId: "BANK_COMMON_001", businessUnit: "공통사용분" },
-  { keywords: ["BANK_AD_001", "29812261804018", "기업은행", "기업 입출금", "기업입출금", "기업(298", "298~", "298122"], accountId: "BANK_AD_001", businessUnit: "광고사업부" }
+  { keywords: ["BANK_PLATFORM_001", "19013209204016", "기업은행(플랫폼)", "기업(190", "기업(190~", "190~", "190132"], accountId: "BANK_PLATFORM_001", businessUnit: "플랫폼" },
+  { keywords: ["BANK_PARTNER_001", "12691002911604", "12691002745704", "하나은행", "하나,", "하나은행(~11604", "하나은행(~45704", "11604", "45704"], accountId: "BANK_PARTNER_001", businessUnit: "대외협력" },
+  { keywords: ["BANK_COMMON_001", "100037330273", "한국투자", "한투", "신한", "신한,한투", "신한,한투 입출금"], accountId: "BANK_COMMON_001", businessUnit: "공통사용분" },
+  { keywords: ["BANK_AD_001", "29812261804018", "기업은행", "기업 입출금", "기업입출금", "기업(298", "기업(298~", "298~", "298122"], accountId: "BANK_AD_001", businessUnit: "광고사업부" }
 ];
 
 const governmentIncomeKeywords = [
@@ -339,11 +339,11 @@ export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserM
       confidence: 0.78,
       matchedRule: "bank-deposit-default-revenue"
     });
-  } else if (includesAny(text, ["대출이자비용", "이자비용"])) {
+  } else if (includesAny(text, ["대출이자비용", "대출이자", "이자비용", "이자납부", "이자수"])) {
     apply({
       businessUnit: result.businessUnit === "미배분" ? "공통사용분" : result.businessUnit,
-      mainCategory: "금융비용",
-      subCategory: "대출이자",
+      mainCategory: "운영비",
+      subCategory: "이자",
       detailCategory: originalMain,
       expenseBasis: "비용성",
       isCommonUse: true,
