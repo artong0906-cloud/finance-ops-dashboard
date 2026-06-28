@@ -392,10 +392,13 @@ export default async function DashboardPage({
   const liabilityChange = sumBy(liabilities, balanceChange);
   const equityChange = assetChange - liabilityChange;
 
-  const cashBalanceRows = assets.filter(isCashBalance);
-  const cashRows = cashBalanceRows.length > 0
-    ? cashBalanceRows.map((row) => ({ id: row.id, name: row.category, openingAmount: row.openingAmount, amount: endingAmount(row), caption: row.memo || "현금성자산" }))
-    : bankAccounts.map((account) => ({ id: account.id, name: `${account.bankName} ${account.accountName}`, openingAmount: account.previousBalance, amount: account.currentBalance, caption: account.businessUnit }));
+  const cashRows = bankAccounts.map((account) => ({
+    id: account.id,
+    name: `${account.bankName} ${account.accountName}`,
+    openingAmount: account.previousBalance,
+    amount: account.currentBalance,
+    caption: account.businessUnit
+  }));
   const openingCashRowsTotal = sumBy(cashRows, (row) => row.openingAmount);
   const cashBalanceTotal = sumBy(cashRows, (row) => row.amount);
   const cashSegments = cashRows
@@ -420,13 +423,13 @@ export default async function DashboardPage({
   ].filter((segment) => segment.amount > 0);
 
   const operatingRows = transactions.filter((row) => !row.isInternalTransfer);
-  const cashIn = sumBy(operatingRows.filter((row) => row.cashFlowType === "입금"), (row) => row.amount);
-  const cashOut = sumBy(operatingRows.filter((row) => row.cashFlowType === "출금"), (row) => row.amount);
+  const bankRows = transactions.filter((row) => row.source === "은행");
+  const externalBankRows = bankRows.filter((row) => !row.isInternalTransfer);
+  const cashIn = sumBy(externalBankRows.filter((row) => row.cashFlowType === "입금"), (row) => row.amount);
+  const cashOut = sumBy(externalBankRows.filter((row) => row.cashFlowType === "출금"), (row) => row.amount);
   const netCashFlow = cashIn - cashOut;
   const closingCashBalanceTotal = cashBalanceTotal;
-  const openingCashBalanceTotal = openingCashRowsTotal || closingCashBalanceTotal - netCashFlow;
-  const bankRows = operatingRows.filter((row) => row.source === "은행");
-  const cardRows = operatingRows.filter((row) => row.source === "카드");
+  const openingCashBalanceTotal = openingCashRowsTotal;
 
   const expenseRows = operatingRows.filter((row) => row.cashFlowType === "출금");
   const totalExpense = sumBy(expenseRows, (row) => row.amount);
@@ -451,7 +454,7 @@ export default async function DashboardPage({
         <section className="grid grid-cols-4 gap-3 max-xl:grid-cols-2 max-md:grid-cols-1">
           <KpiCard caption={`${cashRows.length.toLocaleString("ko-KR")}개 현금성 항목`} icon={<Banknote size={19} />} label="통장현금 잔고" value={formatCompactKRW(cashBalanceTotal)} />
           <KpiCard caption={`${loanRows.length.toLocaleString("ko-KR")}개 대출 항목`} icon={<Landmark size={19} />} label="대출현황" tone="amber" value={formatCompactKRW(loanTotal)} />
-          <KpiCard caption={`입금 ${formatCompactKRW(cashIn)} / 출금 ${formatCompactKRW(cashOut)}`} icon={<BarChart3 size={19} />} label="월간 순현금흐름" tone={netCashFlow >= 0 ? "green" : "amber"} value={formatCompactKRW(netCashFlow)} />
+          <KpiCard caption={`은행 입금 ${formatCompactKRW(cashIn)} / 출금 ${formatCompactKRW(cashOut)}`} icon={<BarChart3 size={19} />} label="월간 순현금흐름" tone={netCashFlow >= 0 ? "green" : "amber"} value={formatCompactKRW(netCashFlow)} />
           <KpiCard caption={`자산 대비 자본 ${percent(equity, totalAssets)}`} icon={<WalletCards size={19} />} label="자본" tone="slate" value={formatCompactKRW(equity)} />
         </section>
 
@@ -460,11 +463,11 @@ export default async function DashboardPage({
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
                 <h2 className="section-title">통장현금 잔고</h2>
-                <p className="mt-1 text-sm text-slate-500">은행·증권·선급금 등 현금성 항목별 보유 비중입니다.</p>
+                <p className="mt-1 text-sm text-slate-500">통장입출금과 동일한 은행·증권 계좌별 월말 잔액 기준입니다.</p>
               </div>
               <span className="badge badge-good">자산 중 {percent(cashBalanceTotal, totalAssets)}</span>
             </div>
-            <SummaryBox label="현금성 잔액 합계" tone="teal" value={formatKRW(cashBalanceTotal)} />
+            <SummaryBox label="계좌 잔액 합계" tone="teal" value={formatKRW(cashBalanceTotal)} />
             <div className="mt-3">
               <StackedBar segments={cashSegments.slice(0, 6)} />
             </div>
@@ -496,7 +499,7 @@ export default async function DashboardPage({
             </div>
             <div className="grid grid-cols-5 gap-3 max-2xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
               <CashFlowBox
-                caption="월말 - 순현금흐름"
+                caption="계좌별 월초잔액 합계"
                 label="월초잔액"
                 tone="stone"
                 value={formatKRW(openingCashBalanceTotal)}
@@ -508,7 +511,7 @@ export default async function DashboardPage({
                 value={formatKRW(cashIn)}
               />
               <CashFlowBox
-                caption={`은행 ${bankRows.filter((row) => row.cashFlowType === "출금").length.toLocaleString("ko-KR")}건 / 카드 ${cardRows.length.toLocaleString("ko-KR")}건`}
+                caption={`${bankRows.filter((row) => row.cashFlowType === "출금").length.toLocaleString("ko-KR")}건`}
                 label="출금"
                 tone="stone"
                 value={formatKRW(cashOut)}
