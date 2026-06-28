@@ -6,6 +6,7 @@ import { resolveMonthParam, withMonthParam, type MonthSearchParams } from "@/lib
 import { formatCompactKRW, formatKRW } from "@/services/dashboard/calculations";
 import { getDashboardData } from "@/services/dashboard/liveData";
 import type { Transaction } from "@/types/finance";
+import { RevenueCategoryEditor, type RevenueEditorRow } from "./RevenueCategoryEditor";
 
 const revenueCategories = ["광고사업부 매출", "대외협력부 매출", "플랫폼 매출", "정부지원금", "기타매출"] as const;
 const allFilter = "전체";
@@ -113,6 +114,24 @@ function rowText(row: Transaction) {
   ].filter(Boolean).join(" "));
 }
 
+function explicitRevenueCategory(row: Transaction): RevenueCategory | null {
+  const text = normalizeText([
+    row.businessUnit,
+    row.mainCategory,
+    row.subCategory,
+    row.detailCategory,
+    row.memo
+  ].filter(Boolean).join(" "));
+
+  if (text.includes(normalizeText("광고사업부 매출"))) return "광고사업부 매출";
+  if (text.includes(normalizeText("대외협력부 매출"))) return "대외협력부 매출";
+  if (text.includes(normalizeText("플랫폼 매출"))) return "플랫폼 매출";
+  if (text.includes(normalizeText("정부지원금"))) return "정부지원금";
+  if (text.includes(normalizeText("기타매출")) || text.includes(normalizeText("기타수익"))) return "기타매출";
+
+  return null;
+}
+
 function matchedMiscKeyword(row: Transaction) {
   const text = rowText(row);
   return miscKeywords.find((keyword) => text.includes(normalizeText(keyword)));
@@ -129,6 +148,7 @@ function isLoanExecutionDeposit(row: Transaction) {
 }
 
 function isExcludedRevenueDeposit(row: Transaction) {
+  if (explicitRevenueCategory(row)) return false;
   if (matchedGovernmentSupportKeyword(row) || matchedMiscKeyword(row)) return false;
   if (row.isInternalTransfer || isLoanExecutionDeposit(row)) return true;
 
@@ -141,9 +161,17 @@ function isExcludedRevenueDeposit(row: Transaction) {
 }
 
 function classifyRevenue(row: Transaction): Pick<RevenueRow, "category" | "rule"> {
+  const explicitCategory = explicitRevenueCategory(row);
   const governmentSupportKeyword = matchedGovernmentSupportKeyword(row);
   const miscKeyword = matchedMiscKeyword(row);
   const mainCategory = normalizeText(row.mainCategory);
+
+  if (explicitCategory) {
+    return {
+      category: explicitCategory,
+      rule: normalizeText(row.memo).includes(normalizeText("수동분류")) ? "수동 변경 기준" : "저장된 분류 기준"
+    };
+  }
 
   if (governmentSupportKeyword) {
     return {
@@ -248,6 +276,16 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
       amount: summary.amount,
       color: chartColors[index % chartColors.length]
     }));
+  const editorRows: RevenueEditorRow[] = filteredRows.map(({ row, category, rule }) => ({
+    id: row.id,
+    date: row.date,
+    category,
+    accountLabel: row.accountName || row.accountId || row.source,
+    vendor: row.vendor,
+    description: row.description,
+    rule,
+    amount: row.amount
+  }));
 
   return (
     <AppShell
@@ -359,34 +397,7 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
           </div>
         </div>
 
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>일자</th>
-                <th>매출구분</th>
-                <th>통장/원천</th>
-                <th>거래처</th>
-                <th>적요</th>
-                <th>분류근거</th>
-                <th className="text-right">입금액</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.map(({ row, category, rule }) => (
-                <tr key={row.id}>
-                  <td>{row.date}</td>
-                  <td><span className={category === "기타매출" ? "badge badge-warning" : category === "정부지원금" ? "badge badge-good" : "badge"}>{category}</span></td>
-                  <td>{row.accountName || row.accountId || row.source}</td>
-                  <td>{row.vendor}</td>
-                  <td>{row.description}</td>
-                  <td>{rule}</td>
-                  <td className="text-right font-black">{formatKRW(row.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <RevenueCategoryEditor rows={editorRows} />
       </section>
     </AppShell>
   );

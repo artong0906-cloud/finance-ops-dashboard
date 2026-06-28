@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { chartColors, RankBar } from "@/components/shared/FinanceViz";
 import { formatKRW } from "@/services/dashboard/calculations";
 import type { Transaction } from "@/types/finance";
@@ -189,10 +190,75 @@ function resolveTalentType(row: Transaction): (typeof talentLabels)[number] | un
   return code ? talentLabelByCode[code] : undefined;
 }
 
+function editableDetailOptions(category: (typeof categoryLabels)[number]) {
+  if (category === "인재투자") return [...talentLabels];
+  if (category === "운영비") return [...operatingLabels];
+  return [];
+}
+
 function resolveCategory(row: Transaction, talentType?: (typeof talentLabels)[number]) {
   const text = rowText(row);
   const isBankWithdrawal = row.source === "은행";
   const isExplicitTalent = Boolean(talentType && hasExplicitTalentMarker(row));
+  const persistedText = normalizeText([
+    row.mainCategory,
+    row.subCategory,
+    row.detailCategory,
+    row.talentInvestmentType,
+    row.memo
+  ].filter(Boolean).join(" "));
+  const persistedTalentCode = resolveTalentCode(row);
+  const persistedTalentType = persistedTalentCode ? talentLabelByCode[persistedTalentCode] : talentType;
+
+  if (persistedTalentCode && hasExplicitTalentMarker(row) && persistedTalentType) {
+    return {
+      category: "인재투자" as const,
+      detail: persistedTalentType
+    };
+  }
+
+  if (persistedText.includes(normalizeText("매출환불")) || persistedText.includes(normalizeText("수동분류: 환불"))) {
+    return {
+      category: "환불" as const,
+      detail: row.detailCategory && row.detailCategory !== "미분류" ? row.detailCategory : "환불/취소"
+    };
+  }
+
+  if (persistedText.includes(normalizeText("인건비")) || persistedText.includes(normalizeText("수동분류: 급여"))) {
+    return {
+      category: "급여" as const,
+      detail: row.detailCategory && row.detailCategory !== "미분류" ? row.detailCategory : "급여"
+    };
+  }
+
+  if (persistedText.includes(normalizeText("광고비")) || persistedText.includes(normalizeText("수동분류: 광고비"))) {
+    return {
+      category: "광고비" as const,
+      detail: row.detailCategory && row.detailCategory !== "미분류" ? row.detailCategory : "광고비"
+    };
+  }
+
+  if (persistedText.includes(normalizeText("세금과공과")) || persistedText.includes(normalizeText("수동분류: 세금"))) {
+    return {
+      category: "세금" as const,
+      detail: row.detailCategory && row.detailCategory !== "미분류" ? row.detailCategory : "세금"
+    };
+  }
+
+  if (persistedText.includes(normalizeText("운영비")) || persistedText.includes(normalizeText("수동분류: 운영비"))) {
+    const operatingType = row.detailCategory === "이자" || row.subCategory === "이자" ? "이자" : "일반운영비";
+    return {
+      category: "운영비" as const,
+      detail: operatingType
+    };
+  }
+
+  if (persistedText.includes(normalizeText("수동분류: 기타")) || persistedText === normalizeText("기타")) {
+    return {
+      category: "기타" as const,
+      detail: row.detailCategory && row.detailCategory !== "미분류" ? row.detailCategory : "기타"
+    };
+  }
 
   if (isBankWithdrawal && includesAny(text, ["환불", "매출취소", "결제취소", "용역수수료지급"])) {
     return {
@@ -410,10 +476,16 @@ export function ExpenseAnalysisClient({
   activeMonth?: string;
   expenseRows: Transaction[];
 }) {
+  const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState<ExpenseCategory>(() => resolveActiveCategory(activeCategoryValue, activeTalentValue));
   const [selectedTalent, setSelectedTalent] = useState<TalentFilter>(() => resolveActiveTalent(activeTalentValue));
   const [selectedOperating, setSelectedOperating] = useState<OperatingFilter>(() => resolveActiveOperating(activeOperatingValue));
   const [selectedCardUser, setSelectedCardUser] = useState(() => activeCardUserValue || allCardUserFilter);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [editCategory, setEditCategory] = useState<(typeof categoryLabels)[number]>("인재투자");
+  const [editDetail, setEditDetail] = useState<string>("인투1 집");
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
+  const [categoryMessage, setCategoryMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setSelectedCategory(resolveActiveCategory(activeCategoryValue, activeTalentValue));
@@ -421,6 +493,18 @@ export function ExpenseAnalysisClient({
     setSelectedOperating(resolveActiveOperating(activeOperatingValue));
     setSelectedCardUser(activeCardUserValue || allCardUserFilter);
   }, [activeCardUserValue, activeCategoryValue, activeOperatingValue, activeTalentValue]);
+
+  useEffect(() => {
+    const options = editableDetailOptions(editCategory);
+    if (options.length === 0) {
+      if (editDetail) setEditDetail("");
+      return;
+    }
+
+    if (!options.some((option) => option === editDetail)) {
+      setEditDetail(options[0]);
+    }
+  }, [editCategory, editDetail]);
 
   const activeCategory = selectedCategory;
   const activeTalent = activeCategory === "인재투자" ? selectedTalent : allTalentFilter;
@@ -469,10 +553,19 @@ export function ExpenseAnalysisClient({
     ? filteredRows.filter((item) => getResolvedTalentCode(item) === activeTalentCode && item.categoryDetail === activeTalentLabel)
     : filteredRows, [activeCategory, activeTalentCode, activeTalentLabel, filteredRows]);
   const filteredTotal = useMemo(() => sumResolvedAmount(finalDetailRows), [finalDetailRows]);
+  const visibleDetailIds = useMemo(() => finalDetailRows.map(({ row }) => row.id), [finalDetailRows]);
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const allVisibleSelected = finalDetailRows.length > 0 && finalDetailRows.every(({ row }) => selectedIdSet.has(row.id));
+  const editDetailOptions = useMemo(() => editableDetailOptions(editCategory), [editCategory]);
   const categorySummaries = useMemo(() => buildSummaries(categoryLabels, resolvedRows, (item) => item.category), [resolvedRows]);
   const talentSummaries = useMemo(() => buildSummaries(talentLabels, resolvedRows.filter((item) => item.category === "인재투자"), (item) => item.talentType), [resolvedRows]);
   const operatingSummaries = useMemo(() => buildSummaries(operatingLabels, resolvedRows.filter((item) => item.category === "운영비"), (item) => item.operatingType), [resolvedRows]);
   const totalExpense = useMemo(() => sumResolvedAmount(resolvedRows), [resolvedRows]);
+
+  useEffect(() => {
+    const allowed = new Set(visibleDetailIds);
+    setSelectedIds((current) => current.filter((id) => allowed.has(id)));
+  }, [visibleDetailIds]);
 
   function applyFilters({
     category = activeCategory,
@@ -517,6 +610,56 @@ export function ExpenseAnalysisClient({
     const formData = new FormData(event.currentTarget);
     const nextCardUser = String(formData.get("cardUser") || allCardUserFilter);
     applyFilters({ category: "인재투자", talent: activeTalent, cardUser: nextCardUser });
+  }
+
+  function toggleDetailRow(id: string) {
+    setCategoryMessage(null);
+    setSelectedIds((current) => (
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id]
+    ));
+  }
+
+  function toggleVisibleRows() {
+    setCategoryMessage(null);
+    setSelectedIds(allVisibleSelected ? [] : visibleDetailIds);
+  }
+
+  async function saveSelectedCategory() {
+    if (selectedIds.length === 0) {
+      setCategoryMessage("변경할 지출 거래를 먼저 선택해 주세요.");
+      return;
+    }
+
+    setIsSavingCategory(true);
+    setCategoryMessage(null);
+
+    try {
+      const response = await fetch("/api/transactions/categories", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          mode: "expense",
+          transactionIds: selectedIds,
+          category: editCategory,
+          detail: editDetail
+        })
+      });
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(result.error || "지출 구분 변경 중 오류가 발생했습니다.");
+      }
+
+      setSelectedIds([]);
+      setCategoryMessage(`${(result.updatedCount ?? selectedIds.length).toLocaleString("ko-KR")}건을 ${editCategory}${editDetail ? ` · ${editDetail}` : ""}로 변경했습니다.`);
+      router.refresh();
+    } catch (error) {
+      setCategoryMessage(error instanceof Error ? error.message : "지출 구분 변경 중 오류가 발생했습니다.");
+    } finally {
+      setIsSavingCategory(false);
+    }
   }
 
   return (
@@ -755,11 +898,53 @@ export function ExpenseAnalysisClient({
           </details>
         </div> : null}
 
+        <div className="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <div className="grid grid-cols-[minmax(0,1fr)_180px_180px_auto_auto] items-end gap-3 max-2xl:grid-cols-[minmax(0,1fr)_180px_180px] max-lg:grid-cols-1">
+            <div>
+              <div className="eyebrow">선택 구분 변경</div>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                상세 행을 체크한 뒤 지출유형을 변경하면 이후 집계와 월별 필터에도 같은 기준으로 반영됩니다.
+              </p>
+              {categoryMessage ? <p className="mt-2 text-sm font-bold text-blue-700">{categoryMessage}</p> : null}
+            </div>
+            <label className="grid gap-2 text-sm font-bold text-slate-700">
+              지출유형
+              <select className="field" value={editCategory} onChange={(event) => setEditCategory(event.target.value as (typeof categoryLabels)[number])}>
+                {categoryLabels.map((label) => (
+                  <option key={label} value={label}>{label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-2 text-sm font-bold text-slate-700">
+              하위유형
+              <select
+                className="field"
+                disabled={editDetailOptions.length === 0}
+                value={editDetail}
+                onChange={(event) => setEditDetail(event.target.value)}
+              >
+                {editDetailOptions.length > 0 ? editDetailOptions.map((label) => (
+                  <option key={label} value={label}>{label}</option>
+                )) : <option value="">자동</option>}
+              </select>
+            </label>
+            <button className="btn btn-primary" disabled={isSavingCategory || selectedIds.length === 0} onClick={saveSelectedCategory} type="button">
+              {isSavingCategory ? "저장 중" : `선택 ${selectedIds.length.toLocaleString("ko-KR")}건 변경`}
+            </button>
+            <button className="btn" disabled={isSavingCategory || selectedIds.length === 0} onClick={() => setSelectedIds([])} type="button">
+              선택 해제
+            </button>
+          </div>
+        </div>
+
         {finalDetailRows.length > 0 ? (
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
+                  <th className="w-10">
+                    <input aria-label="표시된 지출 전체 선택" checked={allVisibleSelected} onChange={toggleVisibleRows} type="checkbox" />
+                  </th>
                   <th>일자</th>
                   <th>지출유형</th>
                   <th>세부유형</th>
@@ -778,6 +963,14 @@ export function ExpenseAnalysisClient({
               <tbody>
                 {finalDetailRows.map(({ row, category, categoryDetail, cardUser }, index) => (
                   <tr key={`${activeCategory}-${activeTalent}-${activeCardUser}-${row.id}-${index}`}>
+                    <td>
+                      <input
+                        aria-label={`${row.date} ${row.vendor} 지출 선택`}
+                        checked={selectedIdSet.has(row.id)}
+                        onChange={() => toggleDetailRow(row.id)}
+                        type="checkbox"
+                      />
+                    </td>
                     <td>{row.date}</td>
                     <td><span className="badge">{category}</span></td>
                     <td><span className="badge badge-muted">{categoryDetail}</span></td>
