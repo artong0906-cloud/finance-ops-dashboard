@@ -206,6 +206,25 @@ const rawVendorKeys = ["거래처", "가맹점명", "사용처", "상호", "업�
 const rawDescriptionKeys = ["거래적요", "적요", "거래내용", "내용", "메모", "description"];
 const rawBalanceKeys = ["거래후 잔액", "거래후잔액", "거래 후 잔액", "거래 잔액", "잔액", "현재잔액", "balance"];
 const rawBankAccountKeys = ["계좌", "계좌번호", "입금계좌", "출금계좌", "통장", "account_id", "sheet_name"];
+const rawBankContextKeys = [
+  "__sheetName",
+  "계정과목",
+  "거래내용",
+  "내용",
+  "적요",
+  "메모",
+  "메모_2",
+  "비고",
+  "의뢰인/수취인",
+  "입금의뢰인",
+  "출금계좌인자내용",
+  "상대계좌예금주명",
+  "상대예금주명",
+  "상대계좌번호",
+  "입금인코드",
+  "거래점명",
+  "거래점"
+];
 const knownBankAccountIds = new Set(["BANK_AD_001", "BANK_PLATFORM_001", "BANK_PARTNER_001", "BANK_COMMON_001", "BANK_CMA_001"]);
 
 function transactionLookupKey(input: {
@@ -254,8 +273,60 @@ function buildCardIssuerLookup(rawRows: DbRawUploadRow[]) {
   return lookup;
 }
 
+function readContextValues(record: Record<string, unknown>, keys: string[]) {
+  return Array.from(new Set(
+    keys
+      .map((key) => readRecordValue(record, [key]))
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  )).join(" ");
+}
+
+function buildBankRawContextLookup(rawRows: DbRawUploadRow[]) {
+  const lookup = new Map<string, string[]>();
+
+  rawRows.forEach((rawRow) => {
+    const rawData = toLookupRecord(rawRow.raw_data);
+    const normalizedData = toLookupRecord(rawRow.normalized_data);
+    const sourceType = String(normalizedData.detected_upload_type || "").toLowerCase();
+    if (sourceType && sourceType !== "bank") return;
+
+    const key = transactionLookupKey({
+      date: normalizedData.transaction_date,
+      amount: normalizedData.amount,
+      cashFlowType: normalizedData.cash_flow_type || "입금",
+      vendor: normalizedData.vendor || readRecordValue(rawData, rawVendorKeys),
+      description: normalizedData.description || readRecordValue(rawData, rawDescriptionKeys)
+    });
+    if (!key) return;
+
+    const context = readContextValues(rawData, rawBankContextKeys);
+    if (!context) return;
+
+    const current = lookup.get(key) || [];
+    current.push(context);
+    lookup.set(key, current);
+  });
+
+  return lookup;
+}
+
 function consumeCardIssuer(row: DbTransaction, lookup?: Map<string, string[]>) {
   if (!lookup || row.source !== "카드") return undefined;
+
+  const key = transactionLookupKey({
+    date: row.transaction_date,
+    amount: row.amount,
+    cashFlowType: row.cash_flow_type,
+    vendor: row.vendor,
+    description: row.description
+  });
+  const values = key ? lookup.get(key) : undefined;
+  return values?.shift();
+}
+
+function consumeBankRawContext(row: DbTransaction, lookup?: Map<string, string[]>) {
+  if (!lookup || row.source !== "은행") return undefined;
 
   const key = transactionLookupKey({
     date: row.transaction_date,
@@ -511,10 +582,12 @@ function toTransaction(
   row: DbTransaction,
   cardIssuerLookup?: Map<string, string[]>,
   mappingRules: UserMappingRule[] = [],
-  bankAccountLookup?: Map<string, string[]>
+  bankAccountLookup?: Map<string, string[]>,
+  bankRawContextLookup?: Map<string, string[]>
 ): Transaction {
   const cardBudgetGroup = row.card_budget_group || consumeCardIssuer(row, cardIssuerLookup) || undefined;
   const accountId = consumeBankAccount(row, bankAccountLookup);
+  const bankRawContext = consumeBankRawContext(row, bankRawContextLookup);
   const firstPass = classifyFirstPass({
     source: row.source,
     businessUnit: row.business_unit,
@@ -533,7 +606,7 @@ function toTransaction(
     isCommonUse: row.is_common_use,
     commonPolicy: row.common_policy,
     reviewStatus: row.review_status,
-    memo: row.memo
+    memo: [row.memo, bankRawContext].filter(Boolean).join(" ")
   }, mappingRules);
   const shouldUseCurrentUploadRules = Boolean(row.upload_batch_id);
   const shouldReclassifyBankDeposit = row.source === "은행" && row.cash_flow_type === "입금";
@@ -770,6 +843,7 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
     const currentRawRows = await fetchAllRawRowsForBatches(admin, transactionBatchIds);
     const cardIssuerLookup = buildCardIssuerLookup(currentRawRows);
     const bankAccountLookup = buildBankAccountLookup(currentRawRows);
+    const bankRawContextLookup = buildBankRawContextLookup(currentRawRows);
     const bankBalanceRawRows = await fetchBankRawRowsForMonth(admin, currentMonth);
     const rawRowsForMonth = includeRawRows
       ? await fetchRawRowsForMonth(admin, currentMonth)
@@ -784,7 +858,7 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
       mode: "live",
       currentMonth,
       availableMonths,
-      transactions: currentTransactions.map((row) => toTransaction(row, cardIssuerLookup, mappingRules, bankAccountLookup)),
+      transactions: currentTransactions.map((row) => toTransaction(row, cardIssuerLookup, mappingRules, bankAccountLookup, bankRawContextLookup)),
       bankAccounts,
       balanceMovements: balanceRowsForMonth(currentMonth, dbBalanceMovements),
       uploadBatches: ((batchResult.data || []) as Record<string, string | null>[]).map((row) => ({
