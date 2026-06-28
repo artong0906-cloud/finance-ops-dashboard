@@ -653,6 +653,18 @@ function applyTemporaryMayUnit(row: DbTransaction, transaction: Transaction): Tr
   };
 }
 
+function classificationMemo(row: DbTransaction, bankRawContext?: string) {
+  if (row.source !== "은행") {
+    return [row.memo, bankRawContext].filter(Boolean).join(" ");
+  }
+
+  return String(row.memo || "")
+    .split("/")
+    .map((part) => part.trim())
+    .filter((part) => !/^(원본시트|계좌번호|잔액|first-pass)\s*:/i.test(part))
+    .join(" ");
+}
+
 function toTransaction(
   row: DbTransaction,
   cardIssuerLookup?: Map<string, string[]>,
@@ -681,7 +693,7 @@ function toTransaction(
     isCommonUse: row.is_common_use,
     commonPolicy: row.common_policy,
     reviewStatus: row.review_status,
-    memo: [row.memo, bankRawContext].filter(Boolean).join(" ")
+    memo: classificationMemo(row, bankRawContext)
   }, mappingRules);
   const isManualCategory = String(row.memo || "").includes("수동분류:");
   const shouldUseCurrentUploadRules = Boolean(row.upload_batch_id);
@@ -997,7 +1009,7 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
   }
 }
 
-export const getDashboardData = unstable_cache(loadDashboardData, ["finance-dashboard-data-v2"], {
+export const getDashboardData = unstable_cache(loadDashboardData, ["finance-dashboard-data-v3"], {
   revalidate: 300,
   tags: ["dashboard-data"]
 });
