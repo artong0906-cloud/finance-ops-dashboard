@@ -8,6 +8,7 @@ import type { Transaction } from "@/types/finance";
 
 const categoryLabels = ["인재투자", "환불", "급여", "광고비", "세금", "운영비", "기타"] as const;
 const editableCategoryLabels = [...categoryLabels, "통장간 이동"] as const;
+const expenseBasisEditLabels = ["유지", "비용", "자산"] as const;
 const talentLabels = ["인투1 집", "인투2 차", "인투3 밥", "인투4 돈", "인투5 성장", "인투6 환경"] as const;
 const allCategoryFilter = "전체";
 const allTalentFilter = "전체 인재투자";
@@ -25,6 +26,7 @@ const highlightCardStyles = [
 
 type ExpenseCategory = typeof allCategoryFilter | (typeof categoryLabels)[number];
 type EditableExpenseCategory = (typeof editableCategoryLabels)[number];
+type EditableExpenseBasis = (typeof expenseBasisEditLabels)[number];
 type TalentFilter = typeof allTalentFilter | (typeof talentLabels)[number];
 type OperatingFilter = typeof allOperatingFilter | (typeof operatingLabels)[number];
 type TalentCode = "1" | "2" | "3" | "4" | "5" | "6";
@@ -63,6 +65,10 @@ const talentLabelByCode: Record<TalentCode, (typeof talentLabels)[number]> = {
 
 function sumResolvedAmount(rows: ResolvedExpenseRow[]) {
   return rows.reduce((sum, { row }) => sum + row.amount, 0);
+}
+
+function resolveExpenseBasis(row: Transaction): "비용" | "자산" {
+  return row.expenseBasis === "자산" ? "자산" : "비용";
 }
 
 function formatPercent(value: number) {
@@ -463,6 +469,22 @@ function buildCardUserSummaries(rows: ResolvedExpenseRow[]) {
   });
 }
 
+function buildBasisSummaries(rows: ResolvedExpenseRow[]) {
+  const total = sumResolvedAmount(rows);
+
+  return (["비용", "자산"] as const).map((label) => {
+    const filtered = rows.filter(({ row }) => resolveExpenseBasis(row) === label);
+    const amount = sumResolvedAmount(filtered);
+
+    return {
+      label,
+      amount,
+      count: filtered.length,
+      share: total > 0 ? (amount / total) * 100 : 0
+    };
+  });
+}
+
 export function ExpenseAnalysisClient({
   activeCategory: activeCategoryValue,
   activeTalent: activeTalentValue,
@@ -486,6 +508,7 @@ export function ExpenseAnalysisClient({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editCategory, setEditCategory] = useState<EditableExpenseCategory>("인재투자");
   const [editDetail, setEditDetail] = useState<string>("인투1 집");
+  const [editExpenseBasis, setEditExpenseBasis] = useState<EditableExpenseBasis>("유지");
   const [isSavingCategory, setIsSavingCategory] = useState(false);
   const [categoryMessage, setCategoryMessage] = useState<string | null>(null);
 
@@ -512,6 +535,13 @@ export function ExpenseAnalysisClient({
   const activeTalent = activeCategory === "인재투자" ? selectedTalent : allTalentFilter;
   const activeTalentCode = activeCategory === "인재투자" ? resolveTalentFilterCode(activeTalent) : undefined;
   const activeOperating = activeCategory === "운영비" ? selectedOperating : allOperatingFilter;
+
+  useEffect(() => {
+    if (activeCategory !== allCategoryFilter) {
+      setEditCategory(activeCategory);
+    }
+  }, [activeCategory]);
+
   const resolvedRows: ResolvedExpenseRow[] = useMemo(() => expenseRows.map((row) => {
     const talentCode = resolveTalentCode(row);
     const talentType = resolveTalentType(row);
@@ -560,6 +590,7 @@ export function ExpenseAnalysisClient({
   const allVisibleSelected = finalDetailRows.length > 0 && finalDetailRows.every(({ row }) => selectedIdSet.has(row.id));
   const editDetailOptions = useMemo(() => editableDetailOptions(editCategory), [editCategory]);
   const categorySummaries = useMemo(() => buildSummaries(categoryLabels, resolvedRows, (item) => item.category), [resolvedRows]);
+  const basisSummaries = useMemo(() => buildBasisSummaries(resolvedRows), [resolvedRows]);
   const talentSummaries = useMemo(() => buildSummaries(talentLabels, resolvedRows.filter((item) => item.category === "인재투자"), (item) => item.talentType), [resolvedRows]);
   const operatingSummaries = useMemo(() => buildSummaries(operatingLabels, resolvedRows.filter((item) => item.category === "운영비"), (item) => item.operatingType), [resolvedRows]);
   const totalExpense = useMemo(() => sumResolvedAmount(resolvedRows), [resolvedRows]);
@@ -638,6 +669,7 @@ export function ExpenseAnalysisClient({
     setCategoryMessage(null);
 
     try {
+      const nextExpenseBasis = editCategory === "통장간 이동" ? "유지" : editExpenseBasis;
       const response = await fetch("/api/transactions/categories", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -645,7 +677,8 @@ export function ExpenseAnalysisClient({
           mode: "expense",
           transactionIds: selectedIds,
           category: editCategory,
-          detail: editDetail
+          detail: editDetail,
+          expenseBasis: nextExpenseBasis
         })
       });
       const result = await response.json().catch(() => ({}));
@@ -655,7 +688,7 @@ export function ExpenseAnalysisClient({
       }
 
       setSelectedIds([]);
-      setCategoryMessage(`${(result.updatedCount ?? selectedIds.length).toLocaleString("ko-KR")}건을 ${editCategory}${editDetail ? ` · ${editDetail}` : ""}로 변경했습니다.`);
+      setCategoryMessage(`${(result.updatedCount ?? selectedIds.length).toLocaleString("ko-KR")}건을 ${editCategory}${editDetail ? ` · ${editDetail}` : ""}${nextExpenseBasis !== "유지" ? ` · ${nextExpenseBasis}` : ""}로 변경했습니다.`);
       router.refresh();
     } catch (error) {
       setCategoryMessage(error instanceof Error ? error.message : "지출 구분 변경 중 오류가 발생했습니다.");
@@ -701,23 +734,23 @@ export function ExpenseAnalysisClient({
           })}
         </div>
 
-        <div className="card">
-          <div className="mb-4 flex items-start justify-between gap-4 max-lg:flex-col">
-            <div>
-              <h2 className="section-title">지출 비중</h2>
-              <p className="mt-1 text-sm text-slate-500">유형별 지출 규모와 건수를 가로 막대 기준으로 비교합니다.</p>
+        <div className="grid grid-cols-[minmax(0,1fr)_420px] gap-4 max-2xl:grid-cols-[minmax(0,1fr)_360px] max-xl:grid-cols-1">
+          <div className="card">
+            <div className="mb-4 flex items-start justify-between gap-4 max-lg:flex-col">
+              <div>
+                <h2 className="section-title">지출 비중</h2>
+                <p className="mt-1 text-sm text-slate-500">유형별 지출 규모와 건수를 가로 막대 기준으로 비교합니다.</p>
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-2 max-lg:justify-start">
+                <span className="badge">{activeCategory}</span>
+                <span className="badge badge-muted">{formatKRW(filteredTotal)}</span>
+                <span className="badge badge-muted">{finalDetailRows.length.toLocaleString("ko-KR")}건</span>
+                <button className="btn btn-sm" onClick={() => applyFilters({ category: allCategoryFilter })} type="button">
+                  전체 지출 보기
+                </button>
+              </div>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-2 max-lg:justify-start">
-              <span className="badge">{activeCategory}</span>
-              <span className="badge badge-muted">{formatKRW(filteredTotal)}</span>
-              <span className="badge badge-muted">{finalDetailRows.length.toLocaleString("ko-KR")}건</span>
-              <button className="btn btn-sm" onClick={() => applyFilters({ category: allCategoryFilter })} type="button">
-                전체 지출 보기
-              </button>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-[minmax(0,1fr)_280px] gap-4 max-xl:grid-cols-1">
             <div className="grid gap-2.5">
               {categorySummaries.map((summary, index) => (
                 <RankBar
@@ -730,24 +763,51 @@ export function ExpenseAnalysisClient({
                 />
               ))}
             </div>
-            <div className="grid gap-3 self-start">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <div className="eyebrow">총 지출</div>
-                <div className="mt-2 text-xl font-black text-slate-950">{formatKRW(totalExpense)}</div>
-                <div className="mt-1 text-xs text-slate-500">{resolvedRows.length.toLocaleString("ko-KR")}건 기준</div>
+          </div>
+
+          <div className="card">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="section-title">비용 / 자산</h2>
+                <p className="mt-1 text-sm text-slate-500">지출 상세의 비용성·자산성 구분입니다.</p>
               </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <div className="eyebrow">현재 상세 필터</div>
-                <div className="mt-2 text-base font-black text-slate-950">{activeCategory}</div>
-                <p className="mt-2 text-xs leading-5 text-slate-500">
-                  {activeCategory === "인재투자"
-                    ? `하위유형: ${activeTalent}`
-                    : activeCategory === "운영비"
-                      ? `보조유형: ${activeOperating}`
-                      : "대카테고리 기준"}
-                  {canFilterByCardUser ? ` · 카드사/사용자: ${activeCardUser}` : ""}
-                </p>
-              </div>
+              <span className="badge badge-muted">{resolvedRows.length.toLocaleString("ko-KR")}건</span>
+            </div>
+
+            <div className="grid gap-3">
+              {basisSummaries.map((summary, index) => (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4" key={summary.label}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-black text-slate-950">{summary.label}</div>
+                      <div className="mt-1 text-xs font-bold text-slate-500">{summary.count.toLocaleString("ko-KR")}건 · {formatPercent(summary.share)}</div>
+                    </div>
+                    <div className="text-right text-lg font-black text-slate-950">{formatKRW(summary.amount)}</div>
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${Math.min(100, summary.share)}%`,
+                        backgroundColor: summary.label === "비용" ? chartColors[index % chartColors.length] : "#2f766f"
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
+              <div className="eyebrow">현재 상세 필터</div>
+              <div className="mt-2 text-base font-black text-slate-950">{activeCategory}</div>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                {activeCategory === "인재투자"
+                  ? `하위유형: ${activeTalent}`
+                  : activeCategory === "운영비"
+                    ? `보조유형: ${activeOperating}`
+                    : "대카테고리 기준"}
+                {canFilterByCardUser ? ` · 카드사/사용자: ${activeCardUser}` : ""}
+              </p>
             </div>
           </div>
         </div>
@@ -901,11 +961,11 @@ export function ExpenseAnalysisClient({
         </div> : null}
 
         <div className="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <div className="grid grid-cols-[minmax(0,1fr)_180px_180px_auto_auto] items-end gap-3 max-2xl:grid-cols-[minmax(0,1fr)_180px_180px] max-lg:grid-cols-1">
+          <div className="grid grid-cols-[minmax(0,1fr)_170px_170px_140px_auto_auto] items-end gap-3 max-2xl:grid-cols-[minmax(0,1fr)_170px_170px_140px] max-lg:grid-cols-1">
             <div>
               <div className="eyebrow">선택 구분 변경</div>
               <p className="mt-1 text-sm leading-6 text-slate-600">
-                상세 행을 체크한 뒤 지출유형을 변경하면 이후 집계와 월별 필터에도 같은 기준으로 반영됩니다.
+                상세 행을 체크한 뒤 지출유형과 비용/자산 구분을 변경하면 이후 집계와 월별 필터에도 반영됩니다.
               </p>
               {categoryMessage ? <p className="mt-2 text-sm font-bold text-blue-700">{categoryMessage}</p> : null}
             </div>
@@ -928,6 +988,19 @@ export function ExpenseAnalysisClient({
                 {editDetailOptions.length > 0 ? editDetailOptions.map((label) => (
                   <option key={label} value={label}>{label}</option>
                 )) : <option value="">자동</option>}
+              </select>
+            </label>
+            <label className="grid gap-2 text-sm font-bold text-slate-700">
+              비용/자산
+              <select
+                className="field"
+                disabled={editCategory === "통장간 이동"}
+                value={editCategory === "통장간 이동" ? "유지" : editExpenseBasis}
+                onChange={(event) => setEditExpenseBasis(event.target.value as EditableExpenseBasis)}
+              >
+                {expenseBasisEditLabels.map((label) => (
+                  <option key={label} value={label}>{label}</option>
+                ))}
               </select>
             </label>
             <button className="btn btn-primary" disabled={isSavingCategory || selectedIds.length === 0} onClick={saveSelectedCategory} type="button">
@@ -989,7 +1062,7 @@ export function ExpenseAnalysisClient({
                     <td>{row.vendor}</td>
                     <td>{row.description}</td>
                     <td className="text-right font-black">{formatKRW(row.amount)}</td>
-                    <td>{row.expenseBasis}</td>
+                    <td><span className={resolveExpenseBasis(row) === "자산" ? "badge badge-good" : "badge badge-muted"}>{resolveExpenseBasis(row)}</span></td>
                   </tr>
                 ))}
               </tbody>

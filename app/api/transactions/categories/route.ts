@@ -11,6 +11,7 @@ type CategoryPayload = {
   mode?: unknown;
   category?: unknown;
   detail?: unknown;
+  expenseBasis?: unknown;
 };
 
 const revenueCategories = ["광고사업부 매출", "대외협력부 매출", "플랫폼 매출", "정부지원금", "기타매출"] as const;
@@ -26,6 +27,14 @@ function isOneOf<T extends readonly string[]>(value: string, values: T): value i
 function normalizeIds(value: unknown) {
   if (!Array.isArray(value)) return [];
   return Array.from(new Set(value.map((item) => String(item || "").trim()).filter(Boolean))).slice(0, 500);
+}
+
+function normalizeExpenseBasis(value: unknown) {
+  const raw = String(value || "").trim();
+  if (!raw || raw === "유지") return null;
+  if (raw === "비용" || raw === "비용성") return "비용성";
+  if (raw === "자산" || raw === "자산성") return "자산성";
+  throw new Error("비용/자산 구분이 올바르지 않습니다.");
 }
 
 function businessUnitForRevenue(category: string) {
@@ -191,6 +200,7 @@ export async function PATCH(request: NextRequest) {
     const mode = String(body.mode || "") as CategoryMode;
     const category = String(body.category || "").trim();
     const detail = String(body.detail || "").trim();
+    const expenseBasis = normalizeExpenseBasis(body.expenseBasis);
 
     if (transactionIds.length === 0) {
       return NextResponse.json({ error: "선택된 거래가 없습니다." }, { status: 400 });
@@ -200,8 +210,15 @@ export async function PATCH(request: NextRequest) {
     }
 
     const admin = createAdminClient();
-    const patch = buildPatch(mode, category, detail);
-    const manualMemo = `수동분류:${category}${detail ? `:${detail}` : ""}`;
+    const patch: Record<string, string | boolean | null | undefined> = { ...buildPatch(mode, category, detail) };
+    if (mode === "expense" && category !== transferCategory) {
+      if (expenseBasis) {
+        patch.expense_basis = expenseBasis;
+      } else {
+        delete patch.expense_basis;
+      }
+    }
+    const manualMemo = `수동분류:${category}${detail ? `:${detail}` : ""}${expenseBasis ? `:${expenseBasis}` : ""}`;
 
     const { data: existingRows, error: fetchError } = await admin
       .from("transactions")
