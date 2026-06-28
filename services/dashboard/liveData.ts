@@ -82,26 +82,101 @@ async function fetchAllTransactions(admin: ReturnType<typeof createAdminClient>)
   return { data: rows, error: null };
 }
 
-async function fetchAllRawRowsForBatches(admin: ReturnType<typeof createAdminClient>, batchIds: string[]) {
-  if (batchIds.length === 0) return [] as DbRawUploadRow[];
+function monthDateRange(month: string | null | undefined) {
+  if (!month || !/^\d{4}-\d{2}$/.test(month)) return null;
 
+  const [year, monthIndex] = month.split("-").map(Number);
+  const nextMonth = monthIndex === 12 ? 1 : monthIndex + 1;
+  const nextYear = monthIndex === 12 ? year + 1 : year;
+
+  return {
+    start: `${month}-01`,
+    end: `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`
+  };
+}
+
+async function fetchTransactionMonths(admin: ReturnType<typeof createAdminClient>) {
   const pageSize = 1000;
-  const rows: DbRawUploadRow[] = [];
+  const rows: Pick<DbTransaction, "transaction_date">[] = [];
 
   for (let from = 0; from < 10000; from += pageSize) {
     const to = from + pageSize - 1;
     const { data, error } = await admin
+      .from("transactions")
+      .select("transaction_date")
+      .order("transaction_date", { ascending: false })
+      .range(from, to);
+
+    if (error) return { data: rows, error };
+
+    const page = (data || []) as Pick<DbTransaction, "transaction_date">[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+
+  return { data: rows, error: null };
+}
+
+async function fetchTransactionsForMonth(admin: ReturnType<typeof createAdminClient>, month: string | null) {
+  const pageSize = 1000;
+  const rows: DbTransaction[] = [];
+  const range = monthDateRange(month);
+
+  for (let from = 0; from < 10000; from += pageSize) {
+    const to = from + pageSize - 1;
+    let query = admin
+      .from("transactions")
+      .select("*")
+      .order("transaction_date", { ascending: false })
+      .range(from, to);
+
+    if (range) {
+      query = query.gte("transaction_date", range.start).lt("transaction_date", range.end);
+    }
+
+    const { data, error } = await query;
+
+    if (error) return { data: rows, error };
+
+    const page = (data || []) as DbTransaction[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+
+  return { data: rows, error: null };
+}
+
+async function fetchAllRawRowsForBatches(admin: ReturnType<typeof createAdminClient>, batchIds: string[], month?: string | null, allowFallback = true) {
+  if (batchIds.length === 0) return [] as DbRawUploadRow[];
+
+  const pageSize = 1000;
+  const rows: DbRawUploadRow[] = [];
+  const range = monthDateRange(month);
+
+  for (let from = 0; from < 10000; from += pageSize) {
+    const to = from + pageSize - 1;
+    let query = admin
       .from("upload_raw_rows")
       .select("upload_batch_id,row_index,raw_data,normalized_data")
       .in("upload_batch_id", batchIds)
       .order("row_index", { ascending: true })
       .range(from, to);
 
+    if (range) {
+      query = query.gte("normalized_data->>transaction_date", range.start).lt("normalized_data->>transaction_date", range.end);
+    }
+
+    const { data, error } = await query;
+
     if (error) return rows;
 
     const page = (data || []) as DbRawUploadRow[];
     rows.push(...page);
     if (page.length < pageSize) break;
+  }
+
+  if (range && rows.length === 0 && allowFallback) {
+    return fetchAllRawRowsForBatches(admin, batchIds, null, false);
   }
 
   return rows;
@@ -724,23 +799,34 @@ function rawRowIsBankUpload(row: DbRawUploadRow) {
   return sheetKey.includes("입출금") || sheetKey.includes("은행") || sheetKey.includes("cma");
 }
 
-async function fetchBankRawRowsForMonth(admin: ReturnType<typeof createAdminClient>, month: string | null) {
+async function fetchBankRawRowsForMonth(admin: ReturnType<typeof createAdminClient>, month: string | null, allowFallback = true) {
   const pageSize = 1000;
   const matched: (DbRawUploadRow & { created_at?: string | null })[] = [];
+  const range = monthDateRange(month);
 
   for (let from = 0; from < 10000; from += pageSize) {
     const to = from + pageSize - 1;
-    const { data, error } = await admin
+    let query = admin
       .from("upload_raw_rows")
       .select("upload_batch_id,row_index,raw_data,normalized_data,created_at")
       .order("created_at", { ascending: false })
       .range(from, to);
+
+    if (range) {
+      query = query.gte("normalized_data->>transaction_date", range.start).lt("normalized_data->>transaction_date", range.end);
+    }
+
+    const { data, error } = await query;
 
     if (error) break;
 
     const page = (data || []) as (DbRawUploadRow & { created_at?: string | null })[];
     matched.push(...page.filter((row) => rawRowIsBankUpload(row) && rawRowMatchesMonth(row, month)));
     if (page.length < pageSize) break;
+  }
+
+  if (range && matched.length === 0 && allowFallback) {
+    return fetchBankRawRowsForMonth(admin, month, false);
   }
 
   if (!month || matched.length === 0) return matched;
@@ -756,14 +842,21 @@ async function fetchBankRawRowsForMonth(admin: ReturnType<typeof createAdminClie
 async function fetchRawRowsForMonth(admin: ReturnType<typeof createAdminClient>, month: string | null) {
   const pageSize = 1000;
   const matched: (DbRawUploadRow & { id?: string; parse_status?: string | null; memo?: string | null; created_at?: string | null })[] = [];
+  const range = monthDateRange(month);
 
   for (let from = 0; from < 10000; from += pageSize) {
     const to = from + pageSize - 1;
-    const { data, error } = await admin
+    let query = admin
       .from("upload_raw_rows")
       .select("id,upload_batch_id,row_index,raw_data,normalized_data,parse_status,memo,created_at")
       .order("created_at", { ascending: false })
       .range(from, to);
+
+    if (range) {
+      query = query.gte("normalized_data->>transaction_date", range.start).lt("normalized_data->>transaction_date", range.end);
+    }
+
+    const { data, error } = await query;
 
     if (error) break;
 
@@ -782,13 +875,13 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
   try {
     const admin = createAdminClient();
     const [
-      transactionResult,
+      transactionMonthResult,
       bankResult,
       balanceResult,
       batchResult,
       mappingRuleResult,
     ] = await Promise.all([
-      fetchAllTransactions(admin),
+      fetchTransactionMonths(admin),
       admin
         .from("bank_account_master")
         .select("id,bank_name,account_name,account_no_masked,business_unit,purpose")
@@ -811,9 +904,9 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
         .order("created_at", { ascending: false })
     ]);
 
-    const dbTransactions = (transactionResult.data || []) as DbTransaction[];
+    const transactionMonthRows = (transactionMonthResult.data || []) as Pick<DbTransaction, "transaction_date">[];
     const dbBalanceMovements = (balanceResult.data || []) as DbBalanceMovement[];
-    if (transactionResult.error || dbTransactions.length === 0) {
+    if (transactionMonthResult.error || transactionMonthRows.length === 0) {
       const mockMonths = getAvailableMonths(mockTransactions.map((row) => ({
         transaction_date: row.date
       } as DbTransaction)), []);
@@ -832,18 +925,20 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
       };
     }
 
-    const availableMonths = getAvailableMonths(dbTransactions, dbBalanceMovements);
+    const availableMonths = getAvailableMonths(transactionMonthRows as DbTransaction[], dbBalanceMovements);
     const currentMonth = pickCurrentMonth(requestedMonth, availableMonths);
-    const currentTransactions = currentMonth
-      ? dbTransactions.filter((row) => row.transaction_date?.startsWith(currentMonth))
-      : dbTransactions;
+    const transactionResult = await fetchTransactionsForMonth(admin, currentMonth);
+    if (transactionResult.error) {
+      throw transactionResult.error;
+    }
+    const currentTransactions = (transactionResult.data || []) as DbTransaction[];
     const mappingRules = ((mappingRuleResult as { data?: DbMappingRule[]; error?: unknown }).data || []) as UserMappingRule[];
     const transactionBatchIds = Array.from(new Set(
       currentTransactions
         .map((row) => row.upload_batch_id)
         .filter((id): id is string => Boolean(id))
     ));
-    const currentRawRows = await fetchAllRawRowsForBatches(admin, transactionBatchIds);
+    const currentRawRows = await fetchAllRawRowsForBatches(admin, transactionBatchIds, currentMonth);
     const cardIssuerLookup = buildCardIssuerLookup(currentRawRows);
     const bankAccountLookup = buildBankAccountLookup(currentRawRows);
     const bankRawContextLookup = buildBankRawContextLookup(currentRawRows);
@@ -903,6 +998,6 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
 }
 
 export const getDashboardData = unstable_cache(loadDashboardData, ["finance-dashboard-data-v2"], {
-  revalidate: 15,
+  revalidate: 300,
   tags: ["dashboard-data"]
 });
