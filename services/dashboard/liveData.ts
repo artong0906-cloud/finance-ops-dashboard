@@ -206,6 +206,7 @@ const rawVendorKeys = ["거래처", "가맹점명", "사용처", "상호", "업�
 const rawDescriptionKeys = ["거래적요", "적요", "거래내용", "내용", "메모", "description"];
 const rawBalanceKeys = ["거래후 잔액", "거래후잔액", "거래 후 잔액", "거래 잔액", "잔액", "현재잔액", "balance"];
 const rawBankAccountKeys = ["계좌", "계좌번호", "입금계좌", "출금계좌", "통장", "account_id", "sheet_name"];
+const knownBankAccountIds = new Set(["BANK_AD_001", "BANK_PLATFORM_001", "BANK_PARTNER_001", "BANK_COMMON_001", "BANK_CMA_001"]);
 
 function transactionLookupKey(input: {
   date?: unknown;
@@ -279,11 +280,12 @@ function inferBankAccountIdFromRawRow(rawRow: DbRawUploadRow) {
   ].filter(Boolean).join(" ");
   const firstPass = classifyFirstPass({
     source: "은행",
-    accountId: accountHint,
-    memo: sheetName
+    memo: accountHint
   });
 
-  return firstPass.accountId;
+  return firstPass.accountId && knownBankAccountIds.has(firstPass.accountId)
+    ? firstPass.accountId
+    : undefined;
 }
 
 function derivedBankAccounts(): BankAccount[] {
@@ -620,13 +622,59 @@ function rawRowMatchesMonth(row: DbRawUploadRow, month: string | null) {
     normalizedData.transaction_date,
     normalizedData.date,
     normalizedData.month,
+    normalizedData.detected_month,
     rawData.transaction_date,
     rawData.date,
     rawData.month,
+    rawData.__detectedMonth,
     readRecordValue(rawData, ["거래일자", "일자", "날짜", "기준월", "월", "month", "date"])
   ].filter(Boolean).map(String);
 
   return values.some((value) => value.startsWith(month) || value.slice(0, 7) === month);
+}
+
+function rawRowIsBankUpload(row: DbRawUploadRow) {
+  const normalizedData = toLookupRecord(row.normalized_data);
+  const rawData = toLookupRecord(row.raw_data);
+  const sourceType = String(normalizedData.detected_upload_type || "").toLowerCase();
+  if (sourceType) return sourceType === "bank";
+
+  const sheetName = [
+    normalizedData.sheet_name,
+    readRecordValue(rawData, ["__sheetName"])
+  ].filter(Boolean).join(" ");
+  const sheetKey = compactLookup(sheetName);
+
+  return sheetKey.includes("입출금") || sheetKey.includes("은행") || sheetKey.includes("cma");
+}
+
+async function fetchBankRawRowsForMonth(admin: ReturnType<typeof createAdminClient>, month: string | null) {
+  const pageSize = 1000;
+  const matched: (DbRawUploadRow & { created_at?: string | null })[] = [];
+
+  for (let from = 0; from < 10000; from += pageSize) {
+    const to = from + pageSize - 1;
+    const { data, error } = await admin
+      .from("upload_raw_rows")
+      .select("upload_batch_id,row_index,raw_data,normalized_data,created_at")
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    if (error) break;
+
+    const page = (data || []) as (DbRawUploadRow & { created_at?: string | null })[];
+    matched.push(...page.filter((row) => rawRowIsBankUpload(row) && rawRowMatchesMonth(row, month)));
+    if (page.length < pageSize) break;
+  }
+
+  if (!month || matched.length === 0) return matched;
+
+  const latestBatchId = [...matched]
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))[0]?.upload_batch_id;
+
+  return latestBatchId
+    ? matched.filter((row) => row.upload_batch_id === latestBatchId)
+    : matched;
 }
 
 async function fetchRawRowsForMonth(admin: ReturnType<typeof createAdminClient>, month: string | null) {
@@ -722,12 +770,13 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
     const currentRawRows = await fetchAllRawRowsForBatches(admin, transactionBatchIds);
     const cardIssuerLookup = buildCardIssuerLookup(currentRawRows);
     const bankAccountLookup = buildBankAccountLookup(currentRawRows);
+    const bankBalanceRawRows = await fetchBankRawRowsForMonth(admin, currentMonth);
     const rawRowsForMonth = includeRawRows
       ? await fetchRawRowsForMonth(admin, currentMonth)
       : { rows: [], count: 0 };
     const bankAccounts = applyMonthlyBankBalances(
       ensureDerivedBankAccounts(((bankResult.data || []) as DbBankAccount[]).map(toBankAccount)),
-      currentRawRows,
+      bankBalanceRawRows.length > 0 ? bankBalanceRawRows : currentRawRows,
       currentMonth
     );
 
