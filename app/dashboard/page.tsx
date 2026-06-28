@@ -394,12 +394,14 @@ export default async function DashboardPage({
 
   const cashBalanceRows = assets.filter(isCashBalance);
   const cashRows = cashBalanceRows.length > 0
-    ? cashBalanceRows.map((row) => ({ id: row.id, name: row.category, amount: endingAmount(row), caption: row.memo || "현금성자산" }))
-    : bankAccounts.map((account) => ({ id: account.id, name: `${account.bankName} ${account.accountName}`, amount: account.currentBalance, caption: account.businessUnit }));
+    ? cashBalanceRows.map((row) => ({ id: row.id, name: row.category, openingAmount: row.openingAmount, amount: endingAmount(row), caption: row.memo || "현금성자산" }))
+    : bankAccounts.map((account) => ({ id: account.id, name: `${account.bankName} ${account.accountName}`, openingAmount: account.previousBalance, amount: account.currentBalance, caption: account.businessUnit }));
+  const openingCashRowsTotal = sumBy(cashRows, (row) => row.openingAmount);
   const cashBalanceTotal = sumBy(cashRows, (row) => row.amount);
   const cashSegments = cashRows
     .sort((a, b) => b.amount - a.amount)
     .map((row, index) => ({ label: row.name, amount: row.amount, color: chartColors[index % chartColors.length], caption: row.caption }));
+  const cashBalanceDelta = cashBalanceTotal - openingCashRowsTotal;
 
   const loanRows = liabilities.filter(isBankLoan).map((row) => ({
     id: row.id,
@@ -422,7 +424,7 @@ export default async function DashboardPage({
   const cashOut = sumBy(operatingRows.filter((row) => row.cashFlowType === "출금"), (row) => row.amount);
   const netCashFlow = cashIn - cashOut;
   const closingCashBalanceTotal = cashBalanceTotal;
-  const openingCashBalanceTotal = closingCashBalanceTotal - netCashFlow;
+  const openingCashBalanceTotal = openingCashRowsTotal || closingCashBalanceTotal - netCashFlow;
   const bankRows = operatingRows.filter((row) => row.source === "은행");
   const cardRows = operatingRows.filter((row) => row.source === "카드");
 
@@ -465,6 +467,28 @@ export default async function DashboardPage({
             <SummaryBox label="현금성 잔액 합계" tone="teal" value={formatKRW(cashBalanceTotal)} />
             <div className="mt-3">
               <StackedBar segments={cashSegments.slice(0, 6)} />
+            </div>
+            <div className="mt-3 grid gap-2">
+              {cashRows.slice(0, 6).map((row) => (
+                <div className="grid grid-cols-[minmax(0,1fr)_120px_120px_100px] items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2 text-xs max-md:grid-cols-2" key={row.id}>
+                  <div className="min-w-0">
+                    <div className="truncate font-black text-slate-800">{row.name}</div>
+                    <div className="mt-0.5 text-[11px] font-bold text-slate-500">{row.caption}</div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-bold text-slate-500">월초</div>
+                    <div className="font-black text-slate-800">{formatKRW(row.openingAmount)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-bold text-slate-500">월말</div>
+                    <div className="font-black text-slate-950">{formatKRW(row.amount)}</div>
+                  </div>
+                  <div className={amountTone(row.amount - row.openingAmount)}>
+                    <div className="text-[11px] font-bold text-slate-500">증감</div>
+                    <div className="font-black">{signedKRW(row.amount - row.openingAmount)}</div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -518,7 +542,7 @@ export default async function DashboardPage({
                 valueClassName={amountTone(netCashFlow)}
               />
               <CashFlowBox
-                caption={`월초 대비 ${signedKRW(netCashFlow)}`}
+                caption={`월초 대비 ${signedKRW(cashBalanceDelta)}`}
                 label="월말잔액"
                 tone="teal"
                 value={formatKRW(closingCashBalanceTotal)}
