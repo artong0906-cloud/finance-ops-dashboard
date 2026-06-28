@@ -17,6 +17,7 @@ const revenueCategories = ["광고사업부 매출", "대외협력부 매출", "
 const expenseCategories = ["인재투자", "환불", "급여", "광고비", "세금", "운영비", "기타"] as const;
 const talentDetails = ["인투1 집", "인투2 차", "인투3 밥", "인투4 돈", "인투5 성장", "인투6 환경"] as const;
 const operatingDetails = ["일반운영비", "이자"] as const;
+const transferCategory = "통장간 이동";
 
 function isOneOf<T extends readonly string[]>(value: string, values: T): value is T[number] {
   return values.includes(value);
@@ -42,6 +43,21 @@ function revenuePatch(category: string) {
     talent_investment_type: null,
     expense_basis: "해당없음",
     is_internal_transfer: false,
+    is_common_use: false,
+    common_policy: null,
+    review_status: "정상"
+  };
+}
+
+function transferPatch() {
+  return {
+    business_unit: "계좌이체",
+    main_category: "계좌이체",
+    sub_category: transferCategory,
+    detail_category: "집계 제외",
+    talent_investment_type: null,
+    expense_basis: "해당없음",
+    is_internal_transfer: true,
     is_common_use: false,
     common_policy: null,
     review_status: "정상"
@@ -135,6 +151,10 @@ function expensePatch(category: string, detail: string) {
 }
 
 function buildPatch(mode: CategoryMode, category: string, detail: string) {
+  if (category === transferCategory) {
+    return transferPatch();
+  }
+
   if (mode === "revenue") {
     if (!isOneOf(category, revenueCategories)) {
       throw new Error("지원하지 않는 매출 카테고리입니다.");

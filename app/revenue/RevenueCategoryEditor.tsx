@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { formatKRW } from "@/services/dashboard/calculations";
 
 const revenueCategories = ["광고사업부 매출", "대외협력부 매출", "플랫폼 매출", "정부지원금", "기타매출"] as const;
+const editableRevenueCategories = [...revenueCategories, "통장간 이동"] as const;
 
 type RevenueCategory = (typeof revenueCategories)[number];
+type EditableRevenueCategory = (typeof editableRevenueCategories)[number];
 
 export type RevenueEditorRow = {
   id: string;
@@ -32,7 +34,7 @@ export function RevenueCategoryEditor({
 }) {
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [category, setCategory] = useState<RevenueCategory>("광고사업부 매출");
+  const [category, setCategory] = useState<EditableRevenueCategory>("광고사업부 매출");
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
@@ -100,8 +102,8 @@ export function RevenueCategoryEditor({
           </div>
           <label className="grid gap-2 text-sm font-bold text-slate-700">
             변경할 매출구분
-            <select className="field" value={category} onChange={(event) => setCategory(event.target.value as RevenueCategory)}>
-              {revenueCategories.map((item) => (
+            <select className="field" value={category} onChange={(event) => setCategory(event.target.value as EditableRevenueCategory)}>
+              {editableRevenueCategories.map((item) => (
                 <option key={item} value={item}>{item}</option>
               ))}
             </select>
