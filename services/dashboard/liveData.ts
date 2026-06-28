@@ -608,16 +608,19 @@ function toTransaction(
     reviewStatus: row.review_status,
     memo: [row.memo, bankRawContext].filter(Boolean).join(" ")
   }, mappingRules);
+  const isManualCategory = String(row.memo || "").includes("수동분류:");
   const shouldUseCurrentUploadRules = Boolean(row.upload_batch_id);
   const shouldReclassifyBankDeposit = row.source === "은행" && row.cash_flow_type === "입금";
   const shouldApplyUserRule = firstPass.matchedRule.startsWith("user-mapping-rule:");
-  const useFirstPass = shouldUseCurrentUploadRules
+  const useFirstPass = !isManualCategory && (
+    shouldUseCurrentUploadRules
     || shouldReclassifyBankDeposit
     || shouldApplyUserRule
     || row.business_unit === "미배분"
     || row.review_status === "확인필요"
     || !row.detail_category
-    || !row.expense_basis;
+    || !row.expense_basis
+  );
 
   const transaction: Transaction = {
     id: row.id,
