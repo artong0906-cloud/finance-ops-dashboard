@@ -468,28 +468,6 @@ export default async function DashboardPage({
             <div className="mt-3">
               <StackedBar segments={cashSegments.slice(0, 6)} />
             </div>
-            <div className="mt-3 grid gap-2">
-              {cashRows.slice(0, 6).map((row) => (
-                <div className="grid grid-cols-[minmax(0,1fr)_120px_120px_100px] items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2 text-xs max-md:grid-cols-2" key={row.id}>
-                  <div className="min-w-0">
-                    <div className="truncate font-black text-slate-800">{row.name}</div>
-                    <div className="mt-0.5 text-[11px] font-bold text-slate-500">{row.caption}</div>
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-bold text-slate-500">월초</div>
-                    <div className="font-black text-slate-800">{formatKRW(row.openingAmount)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-bold text-slate-500">월말</div>
-                    <div className="font-black text-slate-950">{formatKRW(row.amount)}</div>
-                  </div>
-                  <div className={amountTone(row.amount - row.openingAmount)}>
-                    <div className="text-[11px] font-bold text-slate-500">증감</div>
-                    <div className="font-black">{signedKRW(row.amount - row.openingAmount)}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
 
           <div className="card h-full">
