@@ -19,8 +19,8 @@ export default async function BankPage({
   const accountNameById = new Map(bankAccounts.map((account) => [account.id, account.accountName]));
   const accountRows = bankAccounts.map((account) => {
     const rows = bankRows.filter((row) => row.accountId === account.id);
-    const cashIn = sumBy(rows.filter((row) => row.cashFlowType === "입금" && !row.isInternalTransfer), (row) => row.amount);
-    const cashOut = sumBy(rows.filter((row) => row.cashFlowType === "출금" && !row.isInternalTransfer), (row) => row.amount);
+    const cashIn = sumBy(rows.filter((row) => row.cashFlowType === "입금"), (row) => row.amount);
+    const cashOut = sumBy(rows.filter((row) => row.cashFlowType === "출금"), (row) => row.amount);
     return { account, rows, cashIn, cashOut, net: cashIn - cashOut, opening: account.previousBalance, balance: account.currentBalance, delta: account.currentBalance - account.previousBalance };
   });
   const totalBalance = sumBy(accountRows, (row) => row.balance);
@@ -28,7 +28,7 @@ export default async function BankPage({
   const balanceDeltaTotal = totalBalance - openingBalanceTotal;
   const cashInTotal = sumBy(accountRows, (row) => row.cashIn);
   const cashOutTotal = sumBy(accountRows, (row) => row.cashOut);
-  const netCashFlow = cashInTotal - cashOutTotal;
+  const netCashFlow = balanceDeltaTotal;
   const flowSegments = [
     { label: "입금", amount: cashInTotal, color: inflowColor },
     { label: "출금", amount: cashOutTotal, color: outflowColor }
@@ -40,7 +40,7 @@ export default async function BankPage({
         <SummaryBox caption="원본 첫 거래 기준" label="월초잔액" tone="stone" value={formatKRW(openingBalanceTotal)} />
         <SummaryBox caption={`${bankRows.filter((row) => row.cashFlowType === "입금").length.toLocaleString("ko-KR")}건`} label="월 입금" value={formatKRW(cashInTotal)} />
         <SummaryBox caption={`${bankRows.filter((row) => row.cashFlowType === "출금").length.toLocaleString("ko-KR")}건`} label="월 출금" tone="stone" value={formatKRW(cashOutTotal)} />
-        <SummaryBox caption="입금 - 출금" label="순현금흐름" value={formatKRW(netCashFlow)} />
+        <SummaryBox caption="월말 - 월초" label="잔액증감" value={formatKRW(netCashFlow)} />
         <SummaryBox caption={`월초 대비 ${signedKRW(balanceDeltaTotal)}`} label="월말잔액" tone="teal" value={formatKRW(totalBalance)} />
       </section>
 

@@ -424,12 +424,11 @@ export default async function DashboardPage({
 
   const operatingRows = transactions.filter((row) => !row.isInternalTransfer);
   const bankRows = transactions.filter((row) => row.source === "은행");
-  const externalBankRows = bankRows.filter((row) => !row.isInternalTransfer);
-  const cashIn = sumBy(externalBankRows.filter((row) => row.cashFlowType === "입금"), (row) => row.amount);
-  const cashOut = sumBy(externalBankRows.filter((row) => row.cashFlowType === "출금"), (row) => row.amount);
-  const netCashFlow = cashIn - cashOut;
+  const cashIn = sumBy(bankRows.filter((row) => row.cashFlowType === "입금"), (row) => row.amount);
+  const cashOut = sumBy(bankRows.filter((row) => row.cashFlowType === "출금"), (row) => row.amount);
   const closingCashBalanceTotal = cashBalanceTotal;
   const openingCashBalanceTotal = openingCashRowsTotal;
+  const netCashFlow = cashBalanceDelta;
 
   const expenseRows = operatingRows.filter((row) => row.cashFlowType === "출금");
   const totalExpense = sumBy(expenseRows, (row) => row.amount);
@@ -454,7 +453,7 @@ export default async function DashboardPage({
         <section className="grid grid-cols-4 gap-3 max-xl:grid-cols-2 max-md:grid-cols-1">
           <KpiCard caption={`${cashRows.length.toLocaleString("ko-KR")}개 현금성 항목`} icon={<Banknote size={19} />} label="통장현금 잔고" value={formatCompactKRW(cashBalanceTotal)} />
           <KpiCard caption={`${loanRows.length.toLocaleString("ko-KR")}개 대출 항목`} icon={<Landmark size={19} />} label="대출현황" tone="amber" value={formatCompactKRW(loanTotal)} />
-          <KpiCard caption={`은행 입금 ${formatCompactKRW(cashIn)} / 출금 ${formatCompactKRW(cashOut)}`} icon={<BarChart3 size={19} />} label="월간 순현금흐름" tone={netCashFlow >= 0 ? "green" : "amber"} value={formatCompactKRW(netCashFlow)} />
+          <KpiCard caption={`월말 - 월초 · 입금 ${formatCompactKRW(cashIn)} / 출금 ${formatCompactKRW(cashOut)}`} icon={<BarChart3 size={19} />} label="월간 잔액증감" tone={netCashFlow >= 0 ? "green" : "amber"} value={formatCompactKRW(netCashFlow)} />
           <KpiCard caption={`자산 대비 자본 ${percent(equity, totalAssets)}`} icon={<WalletCards size={19} />} label="자본" tone="slate" value={formatCompactKRW(equity)} />
         </section>
 
@@ -517,8 +516,8 @@ export default async function DashboardPage({
                 value={formatKRW(cashOut)}
               />
               <CashFlowBox
-                caption={signedKRW(netCashFlow)}
-                label="순현금흐름"
+                caption="월말 - 월초"
+                label="잔액증감"
                 value={formatKRW(netCashFlow)}
                 valueClassName={amountTone(netCashFlow)}
               />
