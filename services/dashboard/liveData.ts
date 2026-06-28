@@ -183,6 +183,18 @@ function readRecordValue(record: Record<string, unknown>, keys: string[]) {
   return "";
 }
 
+function readExactRecordValue(record: Record<string, unknown>, keys: string[]) {
+  const entries = Object.entries(record);
+  const targets = keys.map(compactLookup);
+
+  for (const target of targets) {
+    const exact = entries.find(([key]) => compactLookup(key) === target);
+    if (exact && exact[1]) return String(exact[1]).trim();
+  }
+
+  return "";
+}
+
 function toLookupRecord(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -192,8 +204,8 @@ function toLookupRecord(value: unknown) {
 const rawCardIssuerKeys = ["카드사", "카드회사", "카드사/사용자", "card_budget_group"];
 const rawVendorKeys = ["거래처", "가맹점명", "사용처", "상호", "업체명", "vendor"];
 const rawDescriptionKeys = ["거래적요", "적요", "거래내용", "내용", "메모", "description"];
-const rawBalanceKeys = ["거래후 잔액", "거래 후 잔액", "거래 잔액", "잔액", "현재잔액", "balance"];
-const rawBankAccountKeys = ["계좌", "계좌번호", "입금계좌", "출금계좌", "통장", "은행", "account_id"];
+const rawBalanceKeys = ["거래후 잔액", "거래후잔액", "거래 후 잔액", "거래 잔액", "잔액", "현재잔액", "balance"];
+const rawBankAccountKeys = ["계좌", "계좌번호", "입금계좌", "출금계좌", "통장", "account_id", "sheet_name"];
 
 function transactionLookupKey(input: {
   date?: unknown;
@@ -261,7 +273,8 @@ function inferBankAccountIdFromRawRow(rawRow: DbRawUploadRow) {
   const sheetName = readRecordValue(rawData, ["__sheetName"]);
   const accountHint = [
     normalizedData.account_id,
-    readRecordValue(rawData, rawBankAccountKeys),
+    normalizedData.sheet_name,
+    readExactRecordValue(rawData, rawBankAccountKeys),
     sheetName
   ].filter(Boolean).join(" ");
   const firstPass = classifyFirstPass({
@@ -273,8 +286,61 @@ function inferBankAccountIdFromRawRow(rawRow: DbRawUploadRow) {
   return firstPass.accountId;
 }
 
+function buildBankAccountLookup(rawRows: DbRawUploadRow[]) {
+  const lookup = new Map<string, string[]>();
+
+  rawRows.forEach((rawRow) => {
+    const rawData = toLookupRecord(rawRow.raw_data);
+    const normalizedData = toLookupRecord(rawRow.normalized_data);
+    const sourceType = String(normalizedData.detected_upload_type || "").toLowerCase();
+    if (sourceType && sourceType !== "bank") return;
+
+    const accountId = inferBankAccountIdFromRawRow(rawRow);
+    if (!accountId) return;
+
+    const key = transactionLookupKey({
+      date: normalizedData.transaction_date,
+      amount: normalizedData.amount,
+      cashFlowType: normalizedData.cash_flow_type || "출금",
+      vendor: normalizedData.vendor || readRecordValue(rawData, rawVendorKeys),
+      description: normalizedData.description || readRecordValue(rawData, rawDescriptionKeys)
+    });
+    if (!key) return;
+
+    const current = lookup.get(key) || [];
+    current.push(accountId);
+    lookup.set(key, current);
+  });
+
+  return lookup;
+}
+
+function consumeBankAccount(row: DbTransaction, lookup?: Map<string, string[]>) {
+  if (row.account_id) return row.account_id;
+  if (!lookup || row.source !== "은행") return undefined;
+
+  const key = transactionLookupKey({
+    date: row.transaction_date,
+    amount: row.amount,
+    cashFlowType: row.cash_flow_type,
+    vendor: row.vendor,
+    description: row.description
+  });
+  const values = key ? lookup.get(key) : undefined;
+  return values?.shift();
+}
+
+function bankBalanceBucketKey(rawRow: DbRawUploadRow, accountId: string) {
+  const rawData = toLookupRecord(rawRow.raw_data);
+  const normalizedData = toLookupRecord(rawRow.normalized_data);
+  const sheetName = readRecordValue(rawData, ["__sheetName"]) || String(normalizedData.sheet_name || "");
+  const accountHint = String(normalizedData.account_id || "").trim();
+
+  return [accountId, accountHint || sheetName || rawRow.upload_batch_id].filter(Boolean).join("::");
+}
+
 function applyMonthlyBankBalances(accounts: BankAccount[], rawRows: DbRawUploadRow[]) {
-  const latestByAccount = new Map<string, { balance: number; date: string; rowIndex: number }>();
+  const latestByBalanceBucket = new Map<string, { accountId: string; balance: number; date: string; rowIndex: number }>();
 
   rawRows.forEach((rawRow) => {
     const rawData = toLookupRecord(rawRow.raw_data);
@@ -289,17 +355,23 @@ function applyMonthlyBankBalances(accounts: BankAccount[], rawRows: DbRawUploadR
     if (!balance) return;
 
     const date = String(normalizedData.transaction_date || "");
-    const current = latestByAccount.get(accountId);
+    const bucketKey = bankBalanceBucketKey(rawRow, accountId);
+    const current = latestByBalanceBucket.get(bucketKey);
     if (!current || date > current.date || (date === current.date && rawRow.row_index > current.rowIndex)) {
-      latestByAccount.set(accountId, { balance, date, rowIndex: rawRow.row_index });
+      latestByBalanceBucket.set(bucketKey, { accountId, balance, date, rowIndex: rawRow.row_index });
     }
   });
 
-  if (latestByAccount.size === 0) return accounts;
+  if (latestByBalanceBucket.size === 0) return accounts;
+
+  const totalsByAccount = new Map<string, number>();
+  latestByBalanceBucket.forEach((item) => {
+    totalsByAccount.set(item.accountId, (totalsByAccount.get(item.accountId) || 0) + item.balance);
+  });
 
   return accounts.map((account) => ({
     ...account,
-    currentBalance: latestByAccount.get(account.id)?.balance || 0
+    currentBalance: totalsByAccount.has(account.id) ? totalsByAccount.get(account.id) || 0 : 0
   }));
 }
 
@@ -355,12 +427,18 @@ function applyTemporaryMayUnit(row: DbTransaction, transaction: Transaction): Tr
   };
 }
 
-function toTransaction(row: DbTransaction, cardIssuerLookup?: Map<string, string[]>, mappingRules: UserMappingRule[] = []): Transaction {
+function toTransaction(
+  row: DbTransaction,
+  cardIssuerLookup?: Map<string, string[]>,
+  mappingRules: UserMappingRule[] = [],
+  bankAccountLookup?: Map<string, string[]>
+): Transaction {
   const cardBudgetGroup = row.card_budget_group || consumeCardIssuer(row, cardIssuerLookup) || undefined;
+  const accountId = consumeBankAccount(row, bankAccountLookup);
   const firstPass = classifyFirstPass({
     source: row.source,
     businessUnit: row.business_unit,
-    accountId: row.account_id,
+    accountId,
     cardBudgetGroup,
     vendor: row.vendor,
     description: row.description,
@@ -377,9 +455,11 @@ function toTransaction(row: DbTransaction, cardIssuerLookup?: Map<string, string
     reviewStatus: row.review_status,
     memo: row.memo
   }, mappingRules);
+  const shouldUseCurrentUploadRules = Boolean(row.upload_batch_id);
   const shouldReclassifyBankDeposit = row.source === "은행" && row.cash_flow_type === "입금";
   const shouldApplyUserRule = firstPass.matchedRule.startsWith("user-mapping-rule:");
-  const useFirstPass = shouldReclassifyBankDeposit
+  const useFirstPass = shouldUseCurrentUploadRules
+    || shouldReclassifyBankDeposit
     || shouldApplyUserRule
     || row.business_unit === "미배분"
     || row.review_status === "확인필요"
@@ -391,7 +471,7 @@ function toTransaction(row: DbTransaction, cardIssuerLookup?: Map<string, string
     date: row.transaction_date,
     source: row.source || "업로드",
     businessUnit: useFirstPass ? firstPass.businessUnit : row.business_unit || "미배분",
-    accountId: row.account_id || firstPass.accountId || undefined,
+    accountId: accountId || firstPass.accountId || undefined,
     cardBudgetGroup,
     cardIssuer: cardBudgetGroup,
     vendor: row.vendor || "-",
@@ -444,6 +524,7 @@ function toBalanceMovement(row: DbBalanceMovement): BalanceMovement {
 
 function balanceRowsForMonth(month: string | null, dbRows: DbBalanceMovement[]) {
   if (month === "2026-05") return mayBalanceMovements;
+  if (month) return [];
 
   const currentRows = month
     ? dbRows.filter((row) => row.month === month)
@@ -562,6 +643,7 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
     ));
     const currentRawRows = await fetchAllRawRowsForBatches(admin, transactionBatchIds);
     const cardIssuerLookup = buildCardIssuerLookup(currentRawRows);
+    const bankAccountLookup = buildBankAccountLookup(currentRawRows);
     const rawRowsForMonth = includeRawRows
       ? await fetchRawRowsForMonth(admin, currentMonth)
       : { rows: [], count: 0 };
@@ -571,7 +653,7 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
       mode: "live",
       currentMonth,
       availableMonths,
-      transactions: currentTransactions.map((row) => toTransaction(row, cardIssuerLookup, mappingRules)),
+      transactions: currentTransactions.map((row) => toTransaction(row, cardIssuerLookup, mappingRules, bankAccountLookup)),
       bankAccounts,
       balanceMovements: balanceRowsForMonth(currentMonth, dbBalanceMovements),
       uploadBatches: ((batchResult.data || []) as Record<string, string | null>[]).map((row) => ({
