@@ -286,6 +286,29 @@ function inferBankAccountIdFromRawRow(rawRow: DbRawUploadRow) {
   return firstPass.accountId;
 }
 
+function derivedBankAccounts(): BankAccount[] {
+  return [
+    {
+      id: "BANK_CMA_001",
+      bankName: "한국투자증권",
+      accountName: "한투CMA",
+      maskedNo: "***CMA",
+      businessUnit: "공통사용분",
+      purpose: "CMA 현금성자산",
+      previousBalance: 0,
+      currentBalance: 0
+    }
+  ];
+}
+
+function ensureDerivedBankAccounts(accounts: BankAccount[]) {
+  const ids = new Set(accounts.map((account) => account.id));
+  return [
+    ...accounts,
+    ...derivedBankAccounts().filter((account) => !ids.has(account.id))
+  ];
+}
+
 function buildBankAccountLookup(rawRows: DbRawUploadRow[]) {
   const lookup = new Map<string, string[]>();
 
@@ -339,7 +362,44 @@ function bankBalanceBucketKey(rawRow: DbRawUploadRow, accountId: string) {
   return [accountId, accountHint || sheetName || rawRow.upload_batch_id].filter(Boolean).join("::");
 }
 
-function applyMonthlyBankBalances(accounts: BankAccount[], rawRows: DbRawUploadRow[]) {
+function rawRowMonth(rawRow: DbRawUploadRow) {
+  const normalizedData = toLookupRecord(rawRow.normalized_data);
+  const transactionDate = String(normalizedData.transaction_date || "");
+  if (transactionDate.length >= 7) return transactionDate.slice(0, 7);
+
+  return String(normalizedData.detected_month || "").slice(0, 7);
+}
+
+function openingBalanceFromRawRow(rawRow: DbRawUploadRow, endingBalance: number) {
+  const normalizedData = toLookupRecord(rawRow.normalized_data);
+  const amount = toNumber(normalizedData.amount as number | string | null | undefined);
+  const cashFlowType = String(normalizedData.cash_flow_type || "");
+
+  if (cashFlowType === "입금") return endingBalance - amount;
+  if (cashFlowType === "출금") return endingBalance + amount;
+  return endingBalance;
+}
+
+function isEarlierBalancePoint(
+  next: { date: string; rowIndex: number },
+  current?: { date: string; rowIndex: number }
+) {
+  if (!current) return true;
+  if (next.date && current.date && next.date !== current.date) return next.date < current.date;
+  return next.rowIndex < current.rowIndex;
+}
+
+function isLaterBalancePoint(
+  next: { date: string; rowIndex: number },
+  current?: { date: string; rowIndex: number }
+) {
+  if (!current) return true;
+  if (next.date && current.date && next.date !== current.date) return next.date > current.date;
+  return next.rowIndex > current.rowIndex;
+}
+
+function applyMonthlyBankBalances(accounts: BankAccount[], rawRows: DbRawUploadRow[], month: string | null) {
+  const earliestByBalanceBucket = new Map<string, { accountId: string; balance: number; date: string; rowIndex: number }>();
   const latestByBalanceBucket = new Map<string, { accountId: string; balance: number; date: string; rowIndex: number }>();
 
   rawRows.forEach((rawRow) => {
@@ -347,6 +407,7 @@ function applyMonthlyBankBalances(accounts: BankAccount[], rawRows: DbRawUploadR
     const normalizedData = toLookupRecord(rawRow.normalized_data);
     const sourceType = String(normalizedData.detected_upload_type || "").toLowerCase();
     if (sourceType && sourceType !== "bank") return;
+    if (month && rawRowMonth(rawRow) !== month) return;
 
     const accountId = inferBankAccountIdFromRawRow(rawRow);
     if (!accountId) return;
@@ -356,21 +417,38 @@ function applyMonthlyBankBalances(accounts: BankAccount[], rawRows: DbRawUploadR
 
     const date = String(normalizedData.transaction_date || "");
     const bucketKey = bankBalanceBucketKey(rawRow, accountId);
+    const nextEarliest = {
+      accountId,
+      balance: openingBalanceFromRawRow(rawRow, balance),
+      date,
+      rowIndex: rawRow.row_index
+    };
+    const earliest = earliestByBalanceBucket.get(bucketKey);
+    if (isEarlierBalancePoint(nextEarliest, earliest)) {
+      earliestByBalanceBucket.set(bucketKey, nextEarliest);
+    }
+
+    const nextLatest = { accountId, balance, date, rowIndex: rawRow.row_index };
     const current = latestByBalanceBucket.get(bucketKey);
-    if (!current || date > current.date || (date === current.date && rawRow.row_index > current.rowIndex)) {
-      latestByBalanceBucket.set(bucketKey, { accountId, balance, date, rowIndex: rawRow.row_index });
+    if (isLaterBalancePoint(nextLatest, current)) {
+      latestByBalanceBucket.set(bucketKey, nextLatest);
     }
   });
 
   if (latestByBalanceBucket.size === 0) return accounts;
 
+  const openingTotalsByAccount = new Map<string, number>();
   const totalsByAccount = new Map<string, number>();
+  earliestByBalanceBucket.forEach((item) => {
+    openingTotalsByAccount.set(item.accountId, (openingTotalsByAccount.get(item.accountId) || 0) + item.balance);
+  });
   latestByBalanceBucket.forEach((item) => {
     totalsByAccount.set(item.accountId, (totalsByAccount.get(item.accountId) || 0) + item.balance);
   });
 
   return accounts.map((account) => ({
     ...account,
+    previousBalance: openingTotalsByAccount.has(account.id) ? openingTotalsByAccount.get(account.id) || 0 : 0,
     currentBalance: totalsByAccount.has(account.id) ? totalsByAccount.get(account.id) || 0 : 0
   }));
 }
@@ -647,7 +725,11 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
     const rawRowsForMonth = includeRawRows
       ? await fetchRawRowsForMonth(admin, currentMonth)
       : { rows: [], count: 0 };
-    const bankAccounts = applyMonthlyBankBalances(((bankResult.data || []) as DbBankAccount[]).map(toBankAccount), currentRawRows);
+    const bankAccounts = applyMonthlyBankBalances(
+      ensureDerivedBankAccounts(((bankResult.data || []) as DbBankAccount[]).map(toBankAccount)),
+      currentRawRows,
+      currentMonth
+    );
 
     return {
       mode: "live",

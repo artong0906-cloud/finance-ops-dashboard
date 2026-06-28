@@ -21,22 +21,14 @@ export default async function BankPage({
     const rows = bankRows.filter((row) => row.accountId === account.id);
     const cashIn = sumBy(rows.filter((row) => row.cashFlowType === "입금" && !row.isInternalTransfer), (row) => row.amount);
     const cashOut = sumBy(rows.filter((row) => row.cashFlowType === "출금" && !row.isInternalTransfer), (row) => row.amount);
-    return { account, rows, cashIn, cashOut, net: cashIn - cashOut, balance: account.currentBalance };
+    return { account, rows, cashIn, cashOut, net: cashIn - cashOut, opening: account.previousBalance, balance: account.currentBalance, delta: account.currentBalance - account.previousBalance };
   });
   const totalBalance = sumBy(accountRows, (row) => row.balance);
+  const openingBalanceTotal = sumBy(accountRows, (row) => row.opening);
+  const balanceDeltaTotal = totalBalance - openingBalanceTotal;
   const cashInTotal = sumBy(accountRows, (row) => row.cashIn);
   const cashOutTotal = sumBy(accountRows, (row) => row.cashOut);
   const netCashFlow = cashInTotal - cashOutTotal;
-  const openingBalanceTotal = totalBalance - netCashFlow;
-  const accountSegments = accountRows
-    .filter(({ balance }) => balance > 0)
-    .sort((a, b) => b.balance - a.balance)
-    .map(({ account, balance }, index) => ({
-      label: `${account.bankName} ${account.accountName}`,
-      amount: balance,
-      color: chartColors[index % chartColors.length],
-      caption: account.businessUnit
-    }));
   const flowSegments = [
     { label: "입금", amount: cashInTotal, color: inflowColor },
     { label: "출금", amount: cashOutTotal, color: outflowColor }
@@ -45,11 +37,11 @@ export default async function BankPage({
   return (
     <AppShell title="통장 입출금" description="선택한 월의 은행 거래 기준으로 입금, 출금, 내부이체를 확인합니다." periodLabel={data.currentMonth || "2026-05"} availableMonths={data.availableMonths} activePath="/bank">
       <section className="mb-5 grid grid-cols-5 gap-3 max-2xl:grid-cols-3 max-xl:grid-cols-2 max-md:grid-cols-1">
-        <SummaryBox caption="월말 - 순현금흐름" label="월초잔액" tone="stone" value={formatKRW(openingBalanceTotal)} />
+        <SummaryBox caption="원본 첫 거래 기준" label="월초잔액" tone="stone" value={formatKRW(openingBalanceTotal)} />
         <SummaryBox caption={`${bankRows.filter((row) => row.cashFlowType === "입금").length.toLocaleString("ko-KR")}건`} label="월 입금" value={formatKRW(cashInTotal)} />
         <SummaryBox caption={`${bankRows.filter((row) => row.cashFlowType === "출금").length.toLocaleString("ko-KR")}건`} label="월 출금" tone="stone" value={formatKRW(cashOutTotal)} />
         <SummaryBox caption="입금 - 출금" label="순현금흐름" value={formatKRW(netCashFlow)} />
-        <SummaryBox caption={`월초 대비 ${signedKRW(netCashFlow)}`} label="월말잔액" tone="teal" value={formatKRW(totalBalance)} />
+        <SummaryBox caption={`월초 대비 ${signedKRW(balanceDeltaTotal)}`} label="월말잔액" tone="teal" value={formatKRW(totalBalance)} />
       </section>
 
       <section className="mb-6 grid items-start grid-cols-2 gap-4 max-xl:grid-cols-1">
@@ -62,16 +54,33 @@ export default async function BankPage({
             <span className="badge badge-muted">총 잔고 {formatCompactKRW(totalBalance)}</span>
           </div>
           <div className="grid gap-2.5">
-            {accountSegments.map((segment) => (
-              <RankBar
-                amount={segment.amount}
-                color={segment.color}
-                count={accountRows.find(({ account }) => `${account.bankName} ${account.accountName}` === segment.label)?.rows.length}
-                key={segment.label}
-                label={segment.label}
-                total={totalBalance}
-              />
-            ))}
+            {accountRows
+              .sort((a, b) => b.balance - a.balance)
+              .map(({ account, opening, balance, delta, rows }, index) => (
+                <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3" key={account.id}>
+                  <RankBar
+                    amount={balance}
+                    color={chartColors[index % chartColors.length]}
+                    count={rows.length}
+                    label={`${account.bankName} ${account.accountName}`}
+                    total={totalBalance}
+                  />
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <div className="text-[11px] font-bold text-slate-500">월초잔액</div>
+                      <div className="font-black text-slate-800">{formatKRW(opening)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-bold text-slate-500">월말잔액</div>
+                      <div className="font-black text-slate-950">{formatKRW(balance)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-bold text-slate-500">증감</div>
+                      <div className={`font-black ${delta >= 0 ? "text-teal-700" : "text-amber-700"}`}>{signedKRW(delta)}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
           </div>
         </div>
 
