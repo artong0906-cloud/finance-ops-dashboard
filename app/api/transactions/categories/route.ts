@@ -51,14 +51,14 @@ function revenuePatch(category: string) {
 
 function transferPatch() {
   return {
-    business_unit: "계좌이체",
+    business_unit: "공통사용분",
     main_category: "계좌이체",
-    sub_category: transferCategory,
-    detail_category: "집계 제외",
+    sub_category: "계좌 간 이동",
+    detail_category: "중복 집계 제외",
     talent_investment_type: null,
     expense_basis: "해당없음",
     is_internal_transfer: true,
-    is_common_use: false,
+    is_common_use: true,
     common_policy: null,
     review_status: "정상"
   };
