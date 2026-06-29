@@ -1,4 +1,4 @@
-import { revalidateTag } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse, type NextRequest } from "next/server";
 import { getApiUser } from "@/lib/auth/api";
 import { canUpload } from "@/lib/auth/roles";
@@ -253,6 +253,9 @@ export async function PATCH(request: NextRequest) {
     }
 
     revalidateTag("dashboard-data", { expire: 0 });
+    ["/dashboard", "/revenue", "/expenses", "/bank", "/cards", "/balance", "/uploads"].forEach((path) => {
+      revalidatePath(path);
+    });
 
     return NextResponse.json({ ok: true, updatedCount });
   } catch (error) {
