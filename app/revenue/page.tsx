@@ -114,22 +114,39 @@ function rowText(row: Transaction) {
   ].filter(Boolean).join(" "));
 }
 
+function revenueCategoryFromText(value: string | undefined): RevenueCategory | null {
+  const text = normalizeText(value);
+
+  if (text.includes(normalizeText("대외협력팀 매출")) || text.includes(normalizeText("대외협력부 매출"))) return "대외협력팀 매출";
+  if (text.includes(normalizeText("플랫폼 매출"))) return "플랫폼 매출";
+  if (text.includes(normalizeText("정부지원금"))) return "정부지원금";
+  if (text.includes(normalizeText("기타매출")) || text.includes(normalizeText("기타수익"))) return "기타매출";
+  if (text.includes(normalizeText("광고사업부 매출"))) return "광고사업부 매출";
+
+  return null;
+}
+
+function manualRevenueCategory(row: Transaction): RevenueCategory | null {
+  const manualMemo = String(row.memo || "")
+    .split(" / ")
+    .map((part) => part.trim())
+    .reverse()
+    .find((part) => normalizeText(part).includes(normalizeText("수동분류:")));
+
+  return revenueCategoryFromText(manualMemo);
+}
+
 function explicitRevenueCategory(row: Transaction): RevenueCategory | null {
-  const text = normalizeText([
+  const manualCategory = manualRevenueCategory(row);
+  if (manualCategory) return manualCategory;
+
+  return revenueCategoryFromText([
     row.businessUnit,
     row.mainCategory,
     row.subCategory,
     row.detailCategory,
     row.memo
   ].filter(Boolean).join(" "));
-
-  if (text.includes(normalizeText("광고사업부 매출"))) return "광고사업부 매출";
-  if (text.includes(normalizeText("대외협력팀 매출")) || text.includes(normalizeText("대외협력부 매출"))) return "대외협력팀 매출";
-  if (text.includes(normalizeText("플랫폼 매출"))) return "플랫폼 매출";
-  if (text.includes(normalizeText("정부지원금"))) return "정부지원금";
-  if (text.includes(normalizeText("기타매출")) || text.includes(normalizeText("기타수익"))) return "기타매출";
-
-  return null;
 }
 
 function matchedMiscKeyword(row: Transaction) {
