@@ -392,6 +392,19 @@ export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserM
       confidence: 0.85,
       matchedRule: "asset-acquisition"
     });
+  } else if (includesAny(text, ["4대보험", "산재", "산재보험", "고용산재", "고용보험", "건강보험", "국민건강", "국민건강보험", "국민건강보험공단", "국민연금", "국민연금공단"])) {
+    apply({
+      businessUnit: "공통사용분",
+      mainCategory: "인건비",
+      subCategory: "급여",
+      detailCategory: "4대보험",
+      expenseBasis: "비용성",
+      isCommonUse: true,
+      commonPolicy: "광고사업부 제외",
+      reviewStatus: "정상",
+      confidence: 0.88,
+      matchedRule: "payroll-insurance"
+    });
   } else if (includesAny(text, ["#인투1", "인투(집)", "인투1집", "지급임차료", "사택", "월세"])) {
     applyTalent("인투1 집", "인투1 집", includesAny(text, ["보증금"]) ? "사택 보증금" : "사택/운영공간 월세", "talent-1-house", "공통사용분", includesAny(text, ["보증금"]) ? "자산성" : "비용성");
   } else if (includesAny(text, ["#인투2", "인투(차)", "인투2차", "법인차량", "리스료", "차량", "주유", "주차", "세차", "탁송", "고속도로", "도로공사", "통행료"])) {
@@ -405,12 +418,16 @@ export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserM
     applyTalent("인투5 성장", "인투5 성장", includesAny(text, ["출장", "숙박", "교통비", "고속도로"]) ? "출장/교통" : "플랫폼/교육", "talent-5-growth", isPlatform ? "플랫폼" : result.businessUnit === "미배분" ? "공통사용분" : result.businessUnit);
   } else if (includesAny(text, ["#인투6", "인투(환경)", "인투6환경", "환경용품", "소모품비", "사무용품", "도서인쇄비", "통신비", "공과금", "건물관리비", "전력비", "수도광열비", "인터넷", "정수기", "복사기", "보안"])) {
     applyTalent("인투6 환경", "인투6 환경", includesAny(text, ["통신", "인터넷"]) ? "통신/인터넷" : "사무환경/소모품", "talent-6-environment");
-  } else if (includesAny(text, ["직원급여", "급여", "사업소득", "인건비"])) {
+  } else if (includesAny(text, ["직원급여", "급여", "프리급여", "사업소득", "인건비", "학자금상환", "지방세", "사업소득세", "근로소득세", "원천세"])) {
     apply({
       businessUnit: "공통사용분",
       mainCategory: "인건비",
       subCategory: includesAny(text, ["사업소득"]) ? "사업소득" : "급여",
-      detailCategory: originalMain,
+      detailCategory: includesAny(text, ["지방세", "사업소득세", "근로소득세", "원천세"])
+        ? "급여 원천세"
+        : includesAny(text, ["학자금상환"])
+          ? "학자금상환"
+          : originalMain,
       expenseBasis: "비용성",
       isCommonUse: true,
       commonPolicy: "광고사업부 제외",

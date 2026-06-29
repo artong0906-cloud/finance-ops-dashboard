@@ -111,6 +111,23 @@ function includesAny(text: string, keywords: string[]) {
   return keywords.some((keyword) => text.includes(normalizeText(keyword)));
 }
 
+const refundKeywords = ["환불", "매출취소", "결제취소", "용역수수료지급", "용역수수료 지급"];
+const payrollTaxKeywords = ["지방세", "사업소득세", "근로소득세", "원천세"];
+const payrollInsuranceKeywords = [
+  "4대보험",
+  "산재",
+  "산재보험",
+  "고용산재",
+  "고용보험",
+  "건강보험",
+  "국민건강",
+  "국민건강보험",
+  "국민건강보험공단",
+  "국민연금",
+  "국민연금공단"
+];
+const salaryKeywords = ["프리급여", "급여", "학자금상환", "인건비", ...payrollTaxKeywords, ...payrollInsuranceKeywords];
+
 function talentCodeFromText(value: string | undefined): TalentCode | undefined {
   const text = normalizeText(value);
   if (!text) return undefined;
@@ -218,6 +235,32 @@ function resolveCategory(row: Transaction, talentType?: (typeof talentLabels)[nu
   const persistedTalentCode = resolveTalentCode(row);
   const persistedTalentType = persistedTalentCode ? talentLabelByCode[persistedTalentCode] : talentType;
 
+  if (persistedText.includes(normalizeText("매출환불"))
+    || persistedText.includes(normalizeText("수동분류: 환불"))
+    || (isBankWithdrawal && includesAny(text, refundKeywords))) {
+    return {
+      category: "환불" as const,
+      detail: includesAny(text, ["용역수수료지급", "용역수수료 지급"]) ? "용역수수료 지급" : "환불/취소"
+    };
+  }
+
+  if (persistedText.includes(normalizeText("인건비"))
+    || persistedText.includes(normalizeText("수동분류: 급여"))
+    || includesAny(text, salaryKeywords)) {
+    return {
+      category: "급여" as const,
+      detail: includesAny(text, payrollInsuranceKeywords)
+        ? "4대보험"
+        : includesAny(text, payrollTaxKeywords)
+          ? "급여 원천세"
+          : includesAny(text, ["학자금상환"])
+            ? "학자금상환"
+            : includesAny(text, ["프리급여"])
+              ? "프리급여"
+              : "급여"
+    };
+  }
+
   if (persistedTalentCode && hasExplicitTalentMarker(row) && persistedTalentType) {
     return {
       category: "인재투자" as const,
@@ -268,19 +311,19 @@ function resolveCategory(row: Transaction, talentType?: (typeof talentLabels)[nu
     };
   }
 
-  if (isBankWithdrawal && includesAny(text, ["환불", "매출취소", "결제취소", "용역수수료지급"])) {
+  if (isBankWithdrawal && includesAny(text, refundKeywords)) {
     return {
       category: "환불" as const,
-      detail: includesAny(text, ["용역수수료지급"]) ? "용역수수료 지급" : "환불/취소"
+      detail: includesAny(text, ["용역수수료지급", "용역수수료 지급"]) ? "용역수수료 지급" : "환불/취소"
     };
   }
 
-  if (includesAny(text, ["프리급여", "급여", "학자금상환", "4대보험", "지방세", "사업소득세", "근로소득세", "원천세", "고용보험", "건강보험", "국민연금"])) {
+  if (includesAny(text, salaryKeywords)) {
     return {
       category: "급여" as const,
-      detail: includesAny(text, ["4대보험", "고용보험", "건강보험", "국민연금"])
+      detail: includesAny(text, payrollInsuranceKeywords)
         ? "4대보험"
-        : includesAny(text, ["지방세", "사업소득세", "근로소득세", "원천세"])
+        : includesAny(text, payrollTaxKeywords)
           ? "급여 원천세"
           : includesAny(text, ["학자금상환"])
             ? "학자금상환"
