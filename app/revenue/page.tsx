@@ -8,7 +8,7 @@ import { getDashboardData } from "@/services/dashboard/liveData";
 import type { Transaction } from "@/types/finance";
 import { RevenueCategoryEditor, type RevenueEditorRow } from "./RevenueCategoryEditor";
 
-const revenueCategories = ["광고사업부 매출", "대외협력부 매출", "플랫폼 매출", "정부지원금", "기타매출"] as const;
+const revenueCategories = ["광고사업부 매출", "대외협력팀 매출", "플랫폼 매출", "정부지원금", "기타매출"] as const;
 const allFilter = "전체";
 const highlightCardStyles = [
   { bg: "linear-gradient(135deg, #2f5f9e 0%, #2a548f 100%)", shadow: "0 12px 26px rgba(47, 95, 158, .18)" },
@@ -124,7 +124,7 @@ function explicitRevenueCategory(row: Transaction): RevenueCategory | null {
   ].filter(Boolean).join(" "));
 
   if (text.includes(normalizeText("광고사업부 매출"))) return "광고사업부 매출";
-  if (text.includes(normalizeText("대외협력부 매출"))) return "대외협력부 매출";
+  if (text.includes(normalizeText("대외협력팀 매출")) || text.includes(normalizeText("대외협력부 매출"))) return "대외협력팀 매출";
   if (text.includes(normalizeText("플랫폼 매출"))) return "플랫폼 매출";
   if (text.includes(normalizeText("정부지원금"))) return "정부지원금";
   if (text.includes(normalizeText("기타매출")) || text.includes(normalizeText("기타수익"))) return "기타매출";
@@ -210,7 +210,7 @@ function resolveFilter(value: string | undefined): RevenueFilter {
 
   const text = normalizeText(value);
   if (text.includes("광고")) return "광고사업부 매출";
-  if (text.includes("대외")) return "대외협력부 매출";
+  if (text.includes("대외")) return "대외협력팀 매출";
   if (text.includes("플랫폼")) return "플랫폼 매출";
   if (text.includes("정부") || text.includes("지원금")) return "정부지원금";
   if (text.includes("기타")) return "기타매출";
@@ -290,7 +290,7 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
   return (
     <AppShell
       title="매출 분석"
-      description="선택 월 통장 입금내역을 기준으로 매출을 광고사업부, 대외협력부, 플랫폼, 정부지원금, 기타매출로 시뮬레이션합니다."
+      description="선택 월 통장 입금내역을 기준으로 매출을 광고사업부, 대외협력팀, 플랫폼, 정부지원금, 기타매출로 시뮬레이션합니다."
       periodLabel={currentMonth}
       availableMonths={data.availableMonths}
       activePath="/revenue"
