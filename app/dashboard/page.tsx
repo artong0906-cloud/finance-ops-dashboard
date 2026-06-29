@@ -17,15 +17,49 @@ import { getDashboardData } from "@/services/dashboard/liveData";
 import type { BalanceMovement, Transaction } from "@/types/finance";
 
 const expenseCategoryOrder = ["인재투자", "환불", "급여", "광고비", "세금", "운영비", "기타"] as const;
+const revenueCategoryOrder = ["광고사업부 매출", "대외협력팀 매출", "플랫폼 매출", "정부지원금", "기타매출"] as const;
 const chartColors = ["#2f5f9e", "#69a2d8", "#52beb7", "#f2a65e", "#7d82df", "#8aa0b7", "#ef8371"];
 const inflowColor = "#4db6ac";
 const outflowColor = "#f2a65e";
+const governmentSupportKeywords = ["고용노동부", "고용부", "지원금", "훈련비", "식대", "보조금", "장려금", "고용센터", "산업인력공단", "한국산업인력공단", "hrd"];
+const miscRevenueKeywords = ["환급", "매출취소", "대여금상환", "급여착오지급반환", "착오지급반환", "캐시백", "조수인", "영업외수익", "이자수익"];
+const loanExecutionKeywords = ["대출실행", "대출금입금", "대출금 입금", "신규대출", "차입금입금", "차입금 입금", "단기차입금", "장기차입금", "차입"];
+const excludedRevenueDepositKeywords = [
+  "계좌이체",
+  "계좌간이동",
+  "중복집계제외",
+  "보통예금",
+  "카드대금",
+  "카드미지급비용",
+  "법인카드결제",
+  "롯데카드",
+  "현대카드",
+  "비씨카드",
+  "하나카드",
+  "국민카드",
+  "신한카드"
+];
+const nonRevenueMainCategories = ["부채", "계좌이체", "카드대금", "광고비", "인건비", "자산취득", "인재투자비", "금융비용", "외상매입금", "대여금", "세금"];
 
 type Segment = {
   label: string;
   amount: number;
   color: string;
   caption?: string;
+};
+
+type RevenueCategory = (typeof revenueCategoryOrder)[number];
+
+type RevenueSummaryRow = {
+  category: RevenueCategory;
+  amount: number;
+  count: number;
+  color: string;
+};
+
+type RevenueSplitEntry = {
+  category: RevenueCategory;
+  amount: number;
 };
 
 function clamp(value: number) {
@@ -129,6 +163,102 @@ function expenseCategory(row: Transaction): (typeof expenseCategoryOrder)[number
   if (includesAny(text, ["부가세", "부가가치세", "과태료", "과테료", "면허세", "주민세", "법인세", "세금과공과"])) return "세금";
   if (includesAny(text, ["이자", "대출이자", "대외협력", "공통사용분", "공통운영비", "운영비", "지급수수료", "관리비", "임차료"])) return "운영비";
   return "기타";
+}
+
+function revenueCategoryFromText(value: string | undefined): RevenueCategory | null {
+  const text = compact(value);
+
+  if (includesAny(text, ["대외협력팀매출", "대외협력부매출"])) return "대외협력팀 매출";
+  if (includesAny(text, ["플랫폼매출"])) return "플랫폼 매출";
+  if (includesAny(text, ["정부지원금"])) return "정부지원금";
+  if (includesAny(text, ["기타매출", "기타수익"])) return "기타매출";
+  if (includesAny(text, ["광고사업부매출"])) return "광고사업부 매출";
+
+  return null;
+}
+
+function manualRevenueCategory(row: Transaction): RevenueCategory | null {
+  const manualMemo = String(row.memo || "")
+    .split(" / ")
+    .map((part) => part.trim())
+    .reverse()
+    .find((part) => compact(part).includes(compact("수동분류:")));
+
+  return revenueCategoryFromText(manualMemo);
+}
+
+function explicitRevenueCategory(row: Transaction): RevenueCategory | null {
+  const manualCategory = manualRevenueCategory(row);
+  if (manualCategory) return manualCategory;
+
+  return revenueCategoryFromText([
+    row.businessUnit,
+    row.mainCategory,
+    row.subCategory,
+    row.detailCategory,
+    row.memo
+  ].filter(Boolean).join(" "));
+}
+
+function parseRevenueSplit(row: Transaction): RevenueSplitEntry[] {
+  const marker = "매출분리:";
+  const splitMemo = String(row.memo || "")
+    .split(" / ")
+    .map((part) => part.trim())
+    .reverse()
+    .find((part) => part.includes(marker));
+
+  if (!splitMemo) return [];
+
+  return splitMemo
+    .slice(splitMemo.indexOf(marker) + marker.length)
+    .split("|")
+    .map((part) => {
+      const [categoryLabel, rawAmount] = part.split("=");
+      const category = revenueCategoryFromText(categoryLabel);
+      const amount = Number(String(rawAmount || "").replace(/,/g, ""));
+
+      if (!category || !Number.isFinite(amount) || amount <= 0) return null;
+      return { category, amount: Math.round(amount) };
+    })
+    .filter((entry): entry is RevenueSplitEntry => Boolean(entry));
+}
+
+function matchedRevenueKeyword(row: Transaction, keywords: string[]) {
+  const text = rowText(row);
+  return keywords.some((keyword) => text.includes(compact(keyword)));
+}
+
+function isLoanExecutionDeposit(row: Transaction) {
+  return matchedRevenueKeyword(row, loanExecutionKeywords);
+}
+
+function isExcludedRevenueDeposit(row: Transaction) {
+  if (explicitRevenueCategory(row)) return false;
+  if (matchedRevenueKeyword(row, governmentSupportKeywords) || matchedRevenueKeyword(row, miscRevenueKeywords)) return false;
+  if (row.isInternalTransfer || isLoanExecutionDeposit(row)) return true;
+
+  const text = rowText(row);
+  if (excludedRevenueDepositKeywords.some((keyword) => text.includes(compact(keyword)))) return true;
+  if (compact(row.subCategory).includes(compact("차입금"))) return true;
+  if (nonRevenueMainCategories.some((category) => compact(row.mainCategory).includes(compact(category)))) return true;
+
+  return false;
+}
+
+function classifyRevenue(row: Transaction): RevenueCategory {
+  const explicitCategory = explicitRevenueCategory(row);
+  if (explicitCategory) return explicitCategory;
+  if (matchedRevenueKeyword(row, governmentSupportKeywords)) return "정부지원금";
+  if (matchedRevenueKeyword(row, miscRevenueKeywords)) return "기타매출";
+  if (compact(row.mainCategory).includes(compact("영업외수익"))) return "기타매출";
+  return "광고사업부 매출";
+}
+
+function revenueAmounts(row: Transaction): RevenueSplitEntry[] {
+  const splitEntries = parseRevenueSplit(row);
+  if (splitEntries.length > 0) return splitEntries;
+  return [{ category: classifyRevenue(row), amount: row.amount }];
 }
 
 function groupSegments<T extends string>(labels: readonly T[], rows: BalanceMovement[], pick: (row: BalanceMovement) => T | string): Segment[] {
@@ -424,6 +554,20 @@ export default async function DashboardPage({
 
   const operatingRows = transactions.filter((row) => !row.isInternalTransfer);
   const bankRows = transactions.filter((row) => row.source === "은행");
+  const revenueCandidateRows = bankRows
+    .filter((row) => row.cashFlowType === "입금")
+    .filter((row) => !isExcludedRevenueDeposit(row));
+  const revenueEntries = revenueCandidateRows.flatMap((row) => revenueAmounts(row));
+  const totalRevenue = sumBy(revenueEntries, (row) => row.amount);
+  const revenueCategoryRows: RevenueSummaryRow[] = revenueCategoryOrder.map((category, index) => {
+    const entries = revenueEntries.filter((entry) => entry.category === category);
+    return {
+      category,
+      amount: sumBy(entries, (entry) => entry.amount),
+      count: entries.length,
+      color: chartColors[index % chartColors.length]
+    };
+  });
   const cashIn = sumBy(bankRows.filter((row) => row.cashFlowType === "입금"), (row) => row.amount);
   const cashOut = sumBy(bankRows.filter((row) => row.cashFlowType === "출금"), (row) => row.amount);
   const closingCashBalanceTotal = cashBalanceTotal;
@@ -455,6 +599,38 @@ export default async function DashboardPage({
           <KpiCard caption={`${loanRows.length.toLocaleString("ko-KR")}개 대출 항목`} icon={<Landmark size={19} />} label="대출현황" tone="amber" value={formatCompactKRW(loanTotal)} />
           <KpiCard caption={`월말 - 월초 · 입금 ${formatCompactKRW(cashIn)} / 출금 ${formatCompactKRW(cashOut)}`} icon={<BarChart3 size={19} />} label="월간 잔액증감" tone={netCashFlow >= 0 ? "green" : "amber"} value={formatCompactKRW(netCashFlow)} />
           <KpiCard caption={`자산 대비 자본 ${percent(equity, totalAssets)}`} icon={<WalletCards size={19} />} label="자본" tone="slate" value={formatCompactKRW(equity)} />
+        </section>
+
+        <section className="card">
+          <div className="mb-3 flex items-start justify-between gap-3 max-md:flex-col">
+            <div>
+              <h2 className="section-title">매출 카테고리</h2>
+              <p className="mt-1 text-sm text-slate-500">매출분석 기준으로 월별 입금 매출을 카테고리별로 요약합니다.</p>
+            </div>
+            <Link href={withMonthParam("/revenue", currentMonth)} className="btn btn-soft">매출 분석 <ArrowRight size={14} /></Link>
+          </div>
+          <div className="grid grid-cols-5 gap-3 max-2xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
+            {revenueCategoryRows.map((row) => (
+              <Link
+                className="rounded-lg border border-slate-200 bg-white p-3 transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-sm"
+                href={withMonthParam(`/revenue?category=${encodeURIComponent(row.category)}#revenue-detail`, currentMonth)}
+                key={row.category}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: row.color }} />
+                    <span className="truncate text-xs font-black text-slate-600">{row.category}</span>
+                  </span>
+                  <span className="text-xs font-black text-slate-500">{percent(row.amount, totalRevenue)}</span>
+                </div>
+                <div className="mt-3 text-xl font-black tracking-tight text-slate-950">{formatKRW(row.amount)}</div>
+                <div className="mt-2 text-xs font-bold text-slate-500">{row.count.toLocaleString("ko-KR")}건</div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full" style={{ width: percent(row.amount, totalRevenue), backgroundColor: row.color }} />
+                </div>
+              </Link>
+            ))}
+          </div>
         </section>
 
         <section className="grid grid-cols-2 items-stretch gap-4 max-xl:grid-cols-1">
