@@ -641,6 +641,7 @@ function applyTemporaryMayUnit(row: DbTransaction, transaction: Transaction): Tr
   if (!row.transaction_date?.startsWith("2026-05")) return transaction;
   if (transaction.cashFlowType !== "입금" && transaction.cashFlowType !== "출금") return transaction;
   if (String(row.memo || "").includes("수동분류:")) return transaction;
+  if (String(row.memo || "").includes("매출분리:")) return transaction;
 
   return {
     ...transaction,
@@ -1010,7 +1011,7 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
   }
 }
 
-export const getDashboardData = unstable_cache(loadDashboardData, ["finance-dashboard-data-v5"], {
+export const getDashboardData = unstable_cache(loadDashboardData, ["finance-dashboard-data-v6"], {
   revalidate: 300,
   tags: ["dashboard-data"]
 });

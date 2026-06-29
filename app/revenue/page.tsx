@@ -84,6 +84,15 @@ type RevenueRow = {
   row: Transaction;
   category: RevenueCategory;
   rule: string;
+  amount: number;
+  lineId: string;
+  isSplit: boolean;
+  splitEntries: RevenueSplitEntry[];
+};
+
+type RevenueSplitEntry = {
+  category: RevenueCategory;
+  amount: number;
 };
 
 type RevenuePageProps = {
@@ -147,6 +156,30 @@ function explicitRevenueCategory(row: Transaction): RevenueCategory | null {
     row.detailCategory,
     row.memo
   ].filter(Boolean).join(" "));
+}
+
+function parseRevenueSplit(row: Transaction): RevenueSplitEntry[] {
+  const marker = "매출분리:";
+  const splitMemo = String(row.memo || "")
+    .split(" / ")
+    .map((part) => part.trim())
+    .reverse()
+    .find((part) => part.includes(marker));
+
+  if (!splitMemo) return [];
+
+  return splitMemo
+    .slice(splitMemo.indexOf(marker) + marker.length)
+    .split("|")
+    .map((part) => {
+      const [categoryLabel, rawAmount] = part.split("=");
+      const category = revenueCategoryFromText(categoryLabel);
+      const amount = Number(String(rawAmount || "").replace(/,/g, ""));
+
+      if (!category || !Number.isFinite(amount) || amount <= 0) return null;
+      return { category, amount: Math.round(amount) };
+    })
+    .filter((entry): entry is RevenueSplitEntry => Boolean(entry));
 }
 
 function matchedMiscKeyword(row: Transaction) {
@@ -217,8 +250,33 @@ function classifyRevenue(row: Transaction): Pick<RevenueRow, "category" | "rule"
   };
 }
 
+function buildRevenueRows(row: Transaction): RevenueRow[] {
+  const splitEntries = parseRevenueSplit(row);
+
+  if (splitEntries.length > 0) {
+    return splitEntries.map((entry) => ({
+      row,
+      category: entry.category,
+      rule: "ciderpay 수동 금액분리",
+      amount: entry.amount,
+      lineId: `${row.id}:split:${entry.category}`,
+      isSplit: true,
+      splitEntries
+    }));
+  }
+
+  return [{
+    row,
+    ...classifyRevenue(row),
+    amount: row.amount,
+    lineId: row.id,
+    isSplit: false,
+    splitEntries: []
+  }];
+}
+
 function sumRevenue(rows: RevenueRow[]) {
-  return rows.reduce((sum, item) => sum + item.row.amount, 0);
+  return rows.reduce((sum, item) => sum + item.amount, 0);
 }
 
 function resolveFilter(value: string | undefined): RevenueFilter {
@@ -254,6 +312,11 @@ function ruleCaption(category: RevenueCategory) {
   return "6월부터 분리 기준 적용 예정";
 }
 
+function isCiderpayDeposit(row: Transaction) {
+  const text = rowText(row);
+  return text.includes(normalizeText("ciderpay")) || text.includes(normalizeText("cider pay")) || text.includes(normalizeText("사이다페이"));
+}
+
 export default async function RevenuePage({ searchParams }: RevenuePageProps) {
   const params = searchParams ? await searchParams : {};
   const activeFilter = resolveFilter(Array.isArray(params.category) ? params.category[0] : params.category);
@@ -266,10 +329,7 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
     && !row.isInternalTransfer
   ));
   const depositRows = bankDepositRows.filter((row) => !isExcludedRevenueDeposit(row));
-  const revenueRows: RevenueRow[] = depositRows.map((row) => ({
-    row,
-    ...classifyRevenue(row)
-  }));
+  const revenueRows: RevenueRow[] = depositRows.flatMap((row) => buildRevenueRows(row));
   const totalRevenue = sumRevenue(revenueRows);
   const filteredRows = activeFilter === allFilter
     ? revenueRows
@@ -293,15 +353,20 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
       amount: summary.amount,
       color: chartColors[index % chartColors.length]
     }));
-  const editorRows: RevenueEditorRow[] = filteredRows.map(({ row, category, rule }) => ({
-    id: row.id,
+  const editorRows: RevenueEditorRow[] = filteredRows.map(({ row, category, rule, amount, lineId, isSplit, splitEntries }) => ({
+    id: lineId,
+    transactionId: row.id,
     date: row.date,
     category,
     accountLabel: row.accountName || row.accountId || row.source,
     vendor: row.vendor,
     description: row.description,
     rule,
-    amount: row.amount
+    amount,
+    originalAmount: row.amount,
+    isSplit,
+    splitEntries,
+    canSplit: isCiderpayDeposit(row) || splitEntries.length > 0
   }));
 
   return (
