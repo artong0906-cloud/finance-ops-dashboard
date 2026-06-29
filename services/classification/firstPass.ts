@@ -320,7 +320,7 @@ export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserM
       subCategory: includesAny(text, ["플랫폼"]) || result.businessUnit === "플랫폼"
         ? "플랫폼 매출"
         : result.businessUnit === "대외협력" || includesAny(text, ["대외협력"])
-          ? "대외협력부 매출"
+          ? "대외협력팀 매출"
           : "광고사업부 매출",
       detailCategory: originalMain === "미분류" ? "입금 매출" : originalMain,
       expenseBasis: "해당없음",
@@ -335,7 +335,7 @@ export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserM
       subCategory: result.businessUnit === "플랫폼"
         ? "플랫폼 매출"
         : result.businessUnit === "대외협력"
-          ? "대외협력부 매출"
+          ? "대외협력팀 매출"
           : "광고사업부 매출",
       detailCategory: originalMain === "미분류" ? "통장 입금 매출" : originalMain,
       expenseBasis: "해당없음",

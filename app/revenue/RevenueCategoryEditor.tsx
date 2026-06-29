@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatKRW } from "@/services/dashboard/calculations";
 
-const revenueCategories = ["광고사업부 매출", "대외협력부 매출", "플랫폼 매출", "정부지원금", "기타매출"] as const;
+const revenueCategories = ["광고사업부 매출", "대외협력팀 매출", "플랫폼 매출", "정부지원금", "기타매출"] as const;
 const editableRevenueCategories = [...revenueCategories, "통장간 이동"] as const;
 
 type RevenueCategory = (typeof revenueCategories)[number];

@@ -14,7 +14,7 @@ type CategoryPayload = {
   expenseBasis?: unknown;
 };
 
-const revenueCategories = ["광고사업부 매출", "대외협력부 매출", "플랫폼 매출", "정부지원금", "기타매출"] as const;
+const revenueCategories = ["광고사업부 매출", "대외협력팀 매출", "플랫폼 매출", "정부지원금", "기타매출"] as const;
 const expenseCategories = ["인재투자", "환불", "급여", "광고비", "세금", "운영비", "기타"] as const;
 const talentDetails = ["인투1 집", "인투2 차", "인투3 밥", "인투4 돈", "인투5 성장", "인투6 환경"] as const;
 const operatingDetails = ["일반운영비", "이자"] as const;
@@ -37,8 +37,13 @@ function normalizeExpenseBasis(value: unknown) {
   throw new Error("비용/자산 구분이 올바르지 않습니다.");
 }
 
+function normalizeRevenueCategory(value: string) {
+  if (value === "대외협력부 매출" || value === "대외협력팀 매출") return "대외협력팀 매출";
+  return value;
+}
+
 function businessUnitForRevenue(category: string) {
-  if (category === "대외협력부 매출") return "대외협력";
+  if (category === "대외협력팀 매출") return "대외협력";
   if (category === "플랫폼 매출") return "플랫폼";
   return "광고사업부";
 }
@@ -165,10 +170,11 @@ function buildPatch(mode: CategoryMode, category: string, detail: string) {
   }
 
   if (mode === "revenue") {
-    if (!isOneOf(category, revenueCategories)) {
+    const revenueCategory = normalizeRevenueCategory(category);
+    if (!isOneOf(revenueCategory, revenueCategories)) {
       throw new Error("지원하지 않는 매출 카테고리입니다.");
     }
-    return revenuePatch(category);
+    return revenuePatch(revenueCategory);
   }
 
   if (!isOneOf(category, expenseCategories)) {
@@ -198,7 +204,8 @@ export async function PATCH(request: NextRequest) {
     const body = (await request.json()) as CategoryPayload;
     const transactionIds = normalizeIds(body.transactionIds);
     const mode = String(body.mode || "") as CategoryMode;
-    const category = String(body.category || "").trim();
+    const rawCategory = String(body.category || "").trim();
+    const category = mode === "revenue" ? normalizeRevenueCategory(rawCategory) : rawCategory;
     const detail = String(body.detail || "").trim();
     const expenseBasis = normalizeExpenseBasis(body.expenseBasis);
 
