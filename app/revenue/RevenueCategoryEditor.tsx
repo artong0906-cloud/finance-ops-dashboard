@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatKRW } from "@/services/dashboard/calculations";
 
@@ -219,53 +219,6 @@ export function RevenueCategoryEditor({
         </div>
       </div>
 
-      {splitTarget ? (
-        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50/70 p-4">
-          <div className="mb-3 flex items-start justify-between gap-4 max-lg:flex-col">
-            <div>
-              <div className="eyebrow">ciderpay 금액 분리</div>
-              <h3 className="mt-1 text-lg font-black text-slate-950">{splitTarget.vendor}</h3>
-              <p className="mt-1 text-sm leading-6 text-slate-600">
-                수수료 제외 후 입금된 순입금액을 사업부별 매출로 나눕니다. 입력 합계는 원 입금액과 정확히 같아야 저장됩니다.
-              </p>
-            </div>
-            <div className="grid min-w-[260px] gap-1 rounded-lg border border-blue-100 bg-white p-3 text-sm">
-              <div className="flex justify-between gap-4"><span className="text-slate-500">원 입금액</span><strong>{formatKRW(splitTarget.originalAmount)}</strong></div>
-              <div className="flex justify-between gap-4"><span className="text-slate-500">분리 합계</span><strong>{formatKRW(allocatedSplitAmount)}</strong></div>
-              <div className="flex justify-between gap-4"><span className="text-slate-500">차이</span><strong className={splitDiff === 0 ? "text-emerald-700" : "text-amber-700"}>{formatKRW(splitDiff)}</strong></div>
-            </div>
-          </div>
-          <div className="grid grid-cols-5 gap-3 max-2xl:grid-cols-3 max-lg:grid-cols-2 max-sm:grid-cols-1">
-            {revenueCategories.map((item) => (
-              <label className="grid gap-2 text-sm font-bold text-slate-700" key={item}>
-                {item}
-                <input
-                  className="field"
-                  inputMode="numeric"
-                  min="0"
-                  onChange={(event) => setSplitAmounts((current) => ({ ...current, [item]: event.target.value }))}
-                  type="number"
-                  value={splitAmounts[item]}
-                />
-              </label>
-            ))}
-          </div>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <button className="btn btn-primary" disabled={isSavingSplit || splitDiff !== 0} onClick={saveSplit} type="button">
-              {isSavingSplit ? "저장 중" : "금액분리 저장"}
-            </button>
-            <button className="btn" disabled={isSavingSplit} onClick={() => setSplitTarget(null)} type="button">
-              닫기
-            </button>
-            {splitTarget.isSplit ? (
-              <button className="btn border-red-200 bg-red-50 text-red-700 hover:bg-red-100" disabled={isSavingSplit} onClick={clearSplit} type="button">
-                분리 해제
-              </button>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
       <div className="table-wrap">
         <table>
           <thead>
@@ -284,38 +237,94 @@ export function RevenueCategoryEditor({
             </tr>
           </thead>
           <tbody>
-            {rows.length > 0 ? rows.map((row) => (
-              <tr key={row.id}>
-                <td>
-                  <input
-                    aria-label={`${row.date} ${row.vendor} 매출 선택`}
-                    checked={!row.isSplit && selectedSet.has(row.transactionId)}
-                    disabled={row.isSplit}
-                    onChange={() => toggleRow(row)}
-                    type="checkbox"
-                  />
-                </td>
-                <td>{row.date}</td>
-                <td><span className={categoryBadgeClass(row.category)}>{row.category}</span></td>
-                <td>{row.accountLabel}</td>
-                <td>{row.vendor}</td>
-                <td>{row.description}</td>
-                <td>{row.rule}</td>
-                <td className="text-right font-black">
-                  {formatKRW(row.amount)}
-                  {row.isSplit ? <div className="mt-1 text-[11px] font-bold text-slate-400">원입금 {formatKRW(row.originalAmount)}</div> : null}
-                </td>
-                <td className="text-right">
-                  {row.canSplit ? (
-                    <button className="btn btn-sm" onClick={() => openSplitEditor(row)} type="button">
-                      금액 분리
-                    </button>
-                  ) : (
-                    <span className="text-xs font-bold text-slate-400">-</span>
-                  )}
-                </td>
-              </tr>
-            )) : (
+            {rows.length > 0 ? rows.map((row) => {
+              const splitEditorOpen = splitTarget?.id === row.id;
+
+              return (
+                <Fragment key={row.id}>
+                  <tr>
+                    <td>
+                      <input
+                        aria-label={`${row.date} ${row.vendor} 매출 선택`}
+                        checked={!row.isSplit && selectedSet.has(row.transactionId)}
+                        disabled={row.isSplit}
+                        onChange={() => toggleRow(row)}
+                        type="checkbox"
+                      />
+                    </td>
+                    <td>{row.date}</td>
+                    <td><span className={categoryBadgeClass(row.category)}>{row.category}</span></td>
+                    <td>{row.accountLabel}</td>
+                    <td>{row.vendor}</td>
+                    <td>{row.description}</td>
+                    <td>{row.rule}</td>
+                    <td className="text-right font-black">
+                      {formatKRW(row.amount)}
+                      {row.isSplit ? <div className="mt-1 text-[11px] font-bold text-slate-400">원입금 {formatKRW(row.originalAmount)}</div> : null}
+                    </td>
+                    <td className="text-right">
+                      {row.canSplit ? (
+                        <button className="btn btn-sm" onClick={() => (splitEditorOpen ? setSplitTarget(null) : openSplitEditor(row))} type="button">
+                          {splitEditorOpen ? "분리 닫기" : "금액 분리"}
+                        </button>
+                      ) : (
+                        <span className="text-xs font-bold text-slate-400">-</span>
+                      )}
+                    </td>
+                  </tr>
+                  {splitEditorOpen ? (
+                    <tr>
+                      <td className="bg-blue-50/50 p-0" colSpan={9}>
+                        <div className="m-3 rounded-lg border border-blue-200 bg-blue-50/70 p-4">
+                          <div className="mb-3 flex items-start justify-between gap-4 max-lg:flex-col">
+                            <div>
+                              <div className="eyebrow">ciderpay 금액 분리</div>
+                              <h3 className="mt-1 text-lg font-black text-slate-950">{row.vendor}</h3>
+                              <p className="mt-1 text-sm leading-6 text-slate-600">
+                                수수료 제외 후 입금된 순입금액을 사업부별 매출로 나눕니다. 입력 합계는 원 입금액과 정확히 같아야 저장됩니다.
+                              </p>
+                            </div>
+                            <div className="grid min-w-[260px] gap-1 rounded-lg border border-blue-100 bg-white p-3 text-sm">
+                              <div className="flex justify-between gap-4"><span className="text-slate-500">원 입금액</span><strong>{formatKRW(row.originalAmount)}</strong></div>
+                              <div className="flex justify-between gap-4"><span className="text-slate-500">분리 합계</span><strong>{formatKRW(allocatedSplitAmount)}</strong></div>
+                              <div className="flex justify-between gap-4"><span className="text-slate-500">차이</span><strong className={splitDiff === 0 ? "text-emerald-700" : "text-amber-700"}>{formatKRW(splitDiff)}</strong></div>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-5 gap-3 max-2xl:grid-cols-3 max-lg:grid-cols-2 max-sm:grid-cols-1">
+                            {revenueCategories.map((item) => (
+                              <label className="grid gap-2 text-sm font-bold text-slate-700" key={item}>
+                                {item}
+                                <input
+                                  className="field"
+                                  inputMode="numeric"
+                                  min="0"
+                                  onChange={(event) => setSplitAmounts((current) => ({ ...current, [item]: event.target.value }))}
+                                  type="number"
+                                  value={splitAmounts[item]}
+                                />
+                              </label>
+                            ))}
+                          </div>
+                          <div className="mt-4 flex flex-wrap items-center gap-2">
+                            <button className="btn btn-primary" disabled={isSavingSplit || splitDiff !== 0} onClick={saveSplit} type="button">
+                              {isSavingSplit ? "저장 중" : "금액분리 저장"}
+                            </button>
+                            <button className="btn" disabled={isSavingSplit} onClick={() => setSplitTarget(null)} type="button">
+                              닫기
+                            </button>
+                            {row.isSplit ? (
+                              <button className="btn border-red-200 bg-red-50 text-red-700 hover:bg-red-100" disabled={isSavingSplit} onClick={clearSplit} type="button">
+                                분리 해제
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
+              );
+            }) : (
               <tr>
                 <td className="py-10 text-center text-sm font-bold text-slate-500" colSpan={9}>
                   표시할 매출 상세가 없습니다.
