@@ -98,6 +98,7 @@ function rowText(row: Transaction) {
     row.cardBudgetGroup,
     row.cardIssuer,
     row.vendor,
+    row.rawDescription,
     row.description,
     row.mainCategory,
     row.subCategory,
@@ -105,6 +106,10 @@ function rowText(row: Transaction) {
     row.talentInvestmentType,
     row.memo
   ].filter(Boolean).join(" "));
+}
+
+function displayDescription(row: Transaction) {
+  return row.rawDescription || row.description;
 }
 
 function includesAny(text: string, keywords: string[]) {
@@ -168,6 +173,7 @@ function resolveTalentCode(row: Transaction): TalentCode | undefined {
     row.subCategory,
     row.detailCategory,
     row.mainCategory,
+    row.rawDescription,
     row.description,
     row.memo
   ].filter(Boolean).join(" ");
@@ -183,6 +189,7 @@ function hasExplicitTalentMarker(row: Transaction) {
     row.mainCategory,
     row.subCategory,
     row.detailCategory,
+    row.rawDescription,
     row.description,
     row.memo
   ].filter(Boolean).join(" "));
@@ -1106,7 +1113,7 @@ export function ExpenseAnalysisClient({
                     <td>{row.subCategory}</td>
                     <td>{row.detailCategory}</td>
                     <td>{row.vendor}</td>
-                    <td>{row.description}</td>
+                    <td>{displayDescription(row)}</td>
                     <td className="text-right font-black">{formatKRW(row.amount)}</td>
                     <td><span className={resolveExpenseBasis(row) === "자산" ? "badge badge-good" : "badge badge-muted"}>{resolveExpenseBasis(row)}</span></td>
                   </tr>
