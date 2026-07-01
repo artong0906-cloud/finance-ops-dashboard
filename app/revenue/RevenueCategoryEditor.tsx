@@ -113,7 +113,10 @@ export function RevenueCategoryEditor({
       }
 
       setSelectedIds([]);
-      setMessage(`${(result.updatedCount ?? selectedIds.length).toLocaleString("ko-KR")}건을 ${category}로 변경했습니다.`);
+      setMessage(
+        `${(result.updatedCount ?? selectedIds.length).toLocaleString("ko-KR")}건을 ${category}로 변경했습니다.` +
+        (result.savedRuleCount ? ` 누적 기준 ${Number(result.savedRuleCount).toLocaleString("ko-KR")}개를 저장했습니다.` : "")
+      );
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "매출 구분 변경 중 오류가 발생했습니다.");

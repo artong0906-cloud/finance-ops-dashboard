@@ -731,7 +731,10 @@ export function ExpenseAnalysisClient({
       }
 
       setSelectedIds([]);
-      setCategoryMessage(`${(result.updatedCount ?? selectedIds.length).toLocaleString("ko-KR")}건을 ${editCategory}${editDetail ? ` · ${editDetail}` : ""}${nextExpenseBasis !== "유지" ? ` · ${nextExpenseBasis}` : ""}로 변경했습니다.`);
+      setCategoryMessage(
+        `${(result.updatedCount ?? selectedIds.length).toLocaleString("ko-KR")}건을 ${editCategory}${editDetail ? ` · ${editDetail}` : ""}${nextExpenseBasis !== "유지" ? ` · ${nextExpenseBasis}` : ""}로 변경했습니다.` +
+        (result.savedRuleCount ? ` 누적 기준 ${Number(result.savedRuleCount).toLocaleString("ko-KR")}개를 저장했습니다.` : "")
+      );
       router.refresh();
     } catch (error) {
       setCategoryMessage(error instanceof Error ? error.message : "지출 구분 변경 중 오류가 발생했습니다.");
