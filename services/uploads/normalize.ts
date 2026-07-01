@@ -56,7 +56,7 @@ const increaseAmountKeys = ["증가", "증가금액", "당월증가", "차변", 
 const decreaseAmountKeys = ["감소", "감소금액", "당월감소", "대변", "decrease_amount"];
 const balanceMemoKeys = ["메모", "비고", "상세", "세부항목", "적요", "memo"];
 const vendorKeys = ["거래처", "가맹점명", "사용처", "상호", "업체명", "거래상대방", "받는분", "보내는분", "예금주", "상대계좌예금주명", "상대예금주명", "vendor"];
-const descriptionKeys = ["적요", "거래내용", "기재내용", "내용", "내역", "거래구분", "거래명", "비고", "품목", "메모", "입금의뢰인", "출금계좌인자내용", "description"];
+const descriptionKeys = ["거래적요", "적요", "거래내용", "기재내용", "입금의뢰인", "출금계좌인자내용", "내용", "내역", "거래구분", "거래명", "비고", "품목", "메모", "description"];
 const amountKeys = ["금액", "거래금액", "거래 금액", "승인금액", "이용금액", "사용금액", "합계", "amount"];
 const incomeKeys = ["입금", "입금액", "입금금액", "입금 금액", "수입", "대변"];
 const outcomeKeys = ["출금", "출금액", "출금금액", "출금 금액", "지출", "차변"];
@@ -66,12 +66,16 @@ const cardSignalKeys = ["카드사", "카드회사", "카드명", "카드구분"
 const bankAccountKeys = ["계좌", "계좌번호", "입금계좌", "출금계좌", "통장", "은행", "account_id"];
 const bankBalanceKeys = ["잔액", "거래후잔액", "거래 후 잔액", "현재잔액", "balance"];
 const cashFlowHintKeys = ["입출금", "입지급", "거래구분", "구분", "현금흐름", "cash_flow_type"];
-const mainCategoryKeys = ["대분류", "분류", "계정과목", "계정", "main_category"];
+const mainCategoryKeys = ["대분류", "분류", "상대계정", "계정과목", "차변계정", "대변계정", "계정", "main_category"];
 const subCategoryKeys = ["중분류", "소분류", "세부분류", "sub_category"];
 const sourceHintKeys = ["__sheetName", "자료유형", "자료 구분", "원천", "출처", "source", "업로드유형", "데이터구분"];
 const bankClassificationContextKeys = [
   "__sheetName",
+  "거래적요",
+  "상대계정",
   "계정과목",
+  "차변계정",
+  "대변계정",
   "거래내용",
   "내용",
   "적요",

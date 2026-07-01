@@ -214,8 +214,23 @@ function buildText(input: FirstPassInput) {
   ].join(" "));
 }
 
+function buildInternalTransferText(input: FirstPassInput) {
+  return compact([
+    input.source,
+    input.cardBudgetGroup,
+    input.vendor,
+    input.description,
+    input.mainCategory,
+    input.subCategory,
+    input.detailCategory,
+    input.talentInvestmentType,
+    input.memo
+  ].join(" "));
+}
+
 export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserMappingRule[] = []): FirstPassResult {
   const text = buildText(input);
+  const internalTransferText = buildInternalTransferText(input);
   const account = inferAccount(text);
   const source = String(input.source || "");
   const originalUnit = normalizeBusinessUnit(input.businessUnit);
@@ -223,6 +238,10 @@ export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserM
   const originalSub = input.subCategory?.trim() || "미분류";
   const originalDetail = input.detailCategory?.trim() || "미분류";
   const cashFlowType = String(input.cashFlowType || "");
+  const hasLoanIncomeSignal = cashFlowType === "입금" && includesAny(text, loanKeywords);
+  const hasGovernmentIncomeSignal = cashFlowType === "입금" && includesAny(text, governmentIncomeKeywords);
+  const hasMiscIncomeSignal = cashFlowType === "입금" && includesAny(text, miscIncomeKeywords);
+  const hasSalesDepositSignal = cashFlowType === "입금" && includesAny(text, ["외상매출금", "광고매출", "매출", "광고주"]);
 
   let result: FirstPassResult = {
     businessUnit: account?.businessUnit || originalUnit,
@@ -267,7 +286,7 @@ export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserM
     });
   };
 
-  if (includesAny(text, internalTransferKeywords)) {
+  if (includesAny(internalTransferText, internalTransferKeywords) && !hasLoanIncomeSignal && !hasGovernmentIncomeSignal && !hasMiscIncomeSignal && !hasSalesDepositSignal) {
     apply({
       businessUnit: result.businessUnit === "미배분" ? "공통사용분" : result.businessUnit,
       mainCategory: includesAny(text, ["카드미지급비용", "카드대금"]) ? "카드대금" : "계좌이체",
@@ -280,7 +299,7 @@ export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserM
       confidence: 0.9,
       matchedRule: "cash-transfer-or-card-payment"
     });
-  } else if (cashFlowType === "입금" && includesAny(text, loanKeywords)) {
+  } else if (hasLoanIncomeSignal) {
     apply({
       businessUnit: result.businessUnit === "미배분" ? "공통사용분" : result.businessUnit,
       mainCategory: "부채",
@@ -291,7 +310,7 @@ export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserM
       confidence: 0.86,
       matchedRule: "loan-principal"
     });
-  } else if (cashFlowType === "입금" && includesAny(text, governmentIncomeKeywords)) {
+  } else if (hasGovernmentIncomeSignal) {
     apply({
       businessUnit: result.businessUnit === "미배분" ? "공통사용분" : result.businessUnit,
       mainCategory: "영업외수익",
@@ -302,7 +321,7 @@ export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserM
       confidence: 0.86,
       matchedRule: "bank-government-income"
     });
-  } else if (cashFlowType === "입금" && includesAny(text, miscIncomeKeywords)) {
+  } else if (hasMiscIncomeSignal) {
     apply({
       businessUnit: result.businessUnit === "미배분" ? "공통사용분" : result.businessUnit,
       mainCategory: "영업외수익",
@@ -313,7 +332,7 @@ export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserM
       confidence: 0.84,
       matchedRule: "bank-misc-income"
     });
-  } else if (cashFlowType === "입금" && includesAny(text, ["외상매출금", "광고매출", "매출", "광고주"])) {
+  } else if (hasSalesDepositSignal) {
     apply({
       businessUnit: result.businessUnit === "미배분" || result.businessUnit === "공통사용분" ? "광고사업부" : result.businessUnit,
       mainCategory: "매출",
