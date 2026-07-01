@@ -121,13 +121,10 @@ const internalTransferKeywords = [
   "100037330273",
   "12691002911604",
   "12691002745704",
-  "보통예금",
   "현금출금",
   "증권계좌입출금",
   "카드미지급비용",
   "카드대금",
-  "타사이체출금",
-  "타사이체입금",
   "광고인하나은행",
   "광고인신한은행",
   "광고인기업은행",
@@ -136,6 +133,15 @@ const internalTransferKeywords = [
   "(주)광고인",
   "성과급충당금",
   "하나은행퇴직연금예치"
+];
+const genericInternalTransferKeywords = ["타사이체출금", "타사이체입금", "계좌간이동", "통장간이동"];
+const ownCompanyKeywords = [
+  "광고인하나은행",
+  "광고인신한은행",
+  "광고인기업은행",
+  "광고인cma",
+  "주식회사광고인",
+  "(주)광고인"
 ];
 
 function compact(value: unknown) {
@@ -223,6 +229,14 @@ function buildText(input: FirstPassInput) {
   ].join(" "));
 }
 
+function internalTransferMemo(value?: string | null) {
+  return String(value || "")
+    .split("/")
+    .map((part) => part.trim())
+    .filter((part) => !/^(원본시트|계좌번호|잔액|first-pass|1차분류|재분류)\s*:/i.test(part))
+    .join(" ");
+}
+
 function buildInternalTransferText(input: FirstPassInput) {
   return compact([
     input.source,
@@ -233,8 +247,13 @@ function buildInternalTransferText(input: FirstPassInput) {
     input.subCategory,
     input.detailCategory,
     input.talentInvestmentType,
-    input.memo
+    internalTransferMemo(input.memo)
   ].join(" "));
+}
+
+function hasInternalTransferSignal(text: string) {
+  return includesAny(text, internalTransferKeywords)
+    || (includesAny(text, genericInternalTransferKeywords) && includesAny(text, ownCompanyKeywords));
 }
 
 export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserMappingRule[] = []): FirstPassResult {
@@ -254,13 +273,13 @@ export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserM
 
   let result: FirstPassResult = {
     businessUnit: account?.businessUnit || originalUnit,
-    accountId: input.accountId || account?.accountId || undefined,
+    accountId: account?.accountId || input.accountId || undefined,
     mainCategory: originalMain,
     subCategory: originalSub,
     detailCategory: originalDetail,
     talentInvestmentType: input.talentInvestmentType || undefined,
     expenseBasis: normalizeExpenseBasis(input.expenseBasis) || (cashFlowType === "출금" ? "비용성" : "해당없음"),
-    isInternalTransfer: Boolean(input.isInternalTransfer),
+    isInternalTransfer: false,
     isCommonUse: Boolean(input.isCommonUse),
     commonPolicy: input.commonPolicy || undefined,
     reviewStatus: normalizeReviewStatus(input.reviewStatus),
@@ -295,7 +314,7 @@ export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserM
     });
   };
 
-  if (includesAny(internalTransferText, internalTransferKeywords) && !hasLoanIncomeSignal && !hasGovernmentIncomeSignal && !hasMiscIncomeSignal && !hasSalesDepositSignal) {
+  if (source === "은행" && hasInternalTransferSignal(internalTransferText) && !hasLoanIncomeSignal && !hasGovernmentIncomeSignal && !hasMiscIncomeSignal && !hasSalesDepositSignal) {
     apply({
       businessUnit: result.businessUnit === "미배분" ? "공통사용분" : result.businessUnit,
       mainCategory: includesAny(text, ["카드미지급비용", "카드대금"]) ? "카드대금" : "계좌이체",
