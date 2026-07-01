@@ -1044,7 +1044,7 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
   }
 }
 
-export const getDashboardData = unstable_cache(loadDashboardData, ["finance-dashboard-data-v9"], {
+export const getDashboardData = unstable_cache(loadDashboardData, ["finance-dashboard-data-v10"], {
   revalidate: 300,
   tags: ["dashboard-data"]
 });
