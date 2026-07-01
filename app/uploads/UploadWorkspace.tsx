@@ -113,7 +113,7 @@ async function getAuthHeaders(includeJson = false) {
   return headers;
 }
 
-export function UploadWorkspace({ reviewRows = [] }: { reviewRows?: RuleReviewRow[] }) {
+export function UploadWorkspace({ reviewRows = [], month }: { reviewRows?: RuleReviewRow[]; month?: string | null }) {
   const [uploadType, setUploadType] = useState<UploadType>("mixed");
   const [file, setFile] = useState<File | null>(null);
   const [ruleFile, setRuleFile] = useState<File | null>(null);
@@ -122,6 +122,7 @@ export function UploadWorkspace({ reviewRows = [] }: { reviewRows?: RuleReviewRo
   const [isParsing, setIsParsing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isImportingRules, setIsImportingRules] = useState(false);
+  const [isDownloadingRules, setIsDownloadingRules] = useState(false);
   const [isLoadingBatches, setIsLoadingBatches] = useState(false);
   const [deletingBatchId, setDeletingBatchId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
@@ -272,26 +273,51 @@ export function UploadWorkspace({ reviewRows = [] }: { reviewRows?: RuleReviewRo
     }
   }
 
-  function handleDownloadReviewRules() {
+  function fileNameFromResponse(response: Response) {
+    const disposition = response.headers.get("content-disposition") || "";
+    const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+    if (encodedName) return decodeURIComponent(encodedName);
+
+    return disposition.match(/filename="?([^";]+)"?/i)?.[1] || `financeops-review-rules-${new Date().toISOString().slice(0, 10)}.csv`;
+  }
+
+  async function handleDownloadReviewRules() {
     setMessage("");
     setError("");
+    setIsDownloadingRules(true);
 
-    if (reviewRows.length === 0) {
-      setError("다운로드할 확인필요 거래가 없습니다.");
-      return;
+    try {
+      const params = new URLSearchParams();
+      if (month) params.set("month", month);
+      const headers = await getAuthHeaders(false);
+      const response = await fetch(`/api/uploads/review-csv${params.toString() ? `?${params.toString()}` : ""}`, {
+        headers,
+        credentials: "include",
+        cache: "no-store"
+      });
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || "확인필요 CSV를 다운로드하지 못했습니다.");
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileNameFromResponse(response);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+      const reviewCount = Number(response.headers.get("x-review-count") || reviewRows.length || 0);
+      setMessage(`확인필요 ${reviewCount.toLocaleString("ko-KR")}건 기준 CSV를 다운로드했습니다.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "확인필요 CSV 다운로드 중 오류가 발생했습니다.");
+    } finally {
+      setIsDownloadingRules(false);
     }
-
-    const csv = buildReviewRuleCsv(reviewRows);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `financeops-review-rules-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-    setMessage(`확인필요 ${reviewRows.length.toLocaleString("ko-KR")}건 기준 CSV를 다운로드했습니다.`);
   }
 
   async function handleImportRules() {
@@ -418,9 +444,9 @@ export function UploadWorkspace({ reviewRows = [] }: { reviewRows?: RuleReviewRo
           </div>
 
           <div className="mt-5 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3 max-md:grid-cols-1">
-            <button className="btn" onClick={handleDownloadReviewRules} type="button">
+            <button className="btn" onClick={handleDownloadReviewRules} disabled={isDownloadingRules} type="button">
               <Download size={15} />
-              확인필요 CSV 다운로드
+              {isDownloadingRules ? "CSV 생성 중..." : "확인필요 CSV 다운로드"}
             </button>
             <input
               id="rule-file-input"
