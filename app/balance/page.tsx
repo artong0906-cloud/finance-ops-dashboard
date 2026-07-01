@@ -1,12 +1,13 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { AssetCandidateApplyClient, type AssetCandidateRow } from "./AssetCandidateApplyClient";
 import { AppShell } from "@/components/layout/AppShell";
 import { chartColors, DonutPanel, equityColor, FinancialCard, outflowColor, StackedBar } from "@/components/shared/FinanceViz";
 import { resolveMonthParam, type MonthSearchParams } from "@/lib/month-filter";
 import { endingAmount, formatCompactKRW, formatKRW, sumBy } from "@/services/dashboard/calculations";
 import { getDashboardData } from "@/services/dashboard/liveData";
-import type { BalanceMovement, BankAccount } from "@/types/finance";
+import type { BalanceMovement, BankAccount, Transaction } from "@/types/finance";
 
 type BalanceViewRow = BalanceMovement & {
   group: string;
@@ -155,6 +156,26 @@ function balanceGroupSegments(rows: BalanceViewRow[], order: string[], bankAccou
       color: chartColors[index % chartColors.length]
     }))
     .filter((segment) => segment.amount > 0);
+}
+
+function assetCandidateRows(rows: Transaction[], month: string): AssetCandidateRow[] {
+  return rows
+    .filter((row) => (
+      row.date.startsWith(month)
+      && row.cashFlowType === "출금"
+      && row.expenseBasis === "자산"
+      && !row.isInternalTransfer
+    ))
+    .map((row) => ({
+      id: row.id,
+      date: row.date,
+      source: row.source,
+      vendor: row.vendor,
+      description: row.rawDescription || row.description,
+      amount: row.amount,
+      businessUnit: row.businessUnit,
+      category: row.detailCategory && row.detailCategory !== "미분류" ? row.detailCategory : row.mainCategory
+    }));
 }
 
 function BalanceGroupSection({
@@ -308,7 +329,8 @@ export default async function BalancePage({
   const params = searchParams ? await searchParams : {};
   const selectedMonth = resolveMonthParam(params);
   const data = await getDashboardData(selectedMonth);
-  const { balanceMovements, bankAccounts } = data;
+  const { balanceMovements, bankAccounts, transactions } = data;
+  const activeMonth = data.currentMonth || "2026-05";
   const viewRows = toViewRows(balanceMovements);
   const assets = viewRows.filter((row) => row.statementType === "자산");
   const liabilities = viewRows.filter((row) => row.statementType === "부채");
@@ -328,7 +350,7 @@ export default async function BalancePage({
   ].filter((segment) => segment.amount > 0);
 
   return (
-    <AppShell title="자산/부채 현황" description="월별 업로드 증감표를 기준으로 자산·부채 항목별 상세를 확인합니다." periodLabel={data.currentMonth || "2026-05"} availableMonths={data.availableMonths} activePath="/balance">
+    <AppShell title="자산/부채 현황" description="월별 업로드 증감표를 기준으로 자산·부채 항목별 상세를 확인합니다." periodLabel={activeMonth} availableMonths={data.availableMonths} activePath="/balance">
       <section className="card mb-6">
         <div className="mb-4 flex items-start justify-between gap-4 max-md:flex-col">
           <div>
@@ -369,6 +391,10 @@ export default async function BalancePage({
           <Link className="btn mt-4 w-full" href="/uploads">자산·부채 파일 업로드</Link>
         </div>
       </section>
+
+      {activeMonth === "2026-06" ? (
+        <AssetCandidateApplyClient month={activeMonth} rows={assetCandidateRows(transactions, activeMonth)} />
+      ) : null}
 
       <section className="mb-6 grid grid-cols-2 gap-4 max-xl:grid-cols-1">
         <BalanceGroupSection rows={assets} statementType="자산" title="자산 상세" bankAccounts={bankAccounts} />
