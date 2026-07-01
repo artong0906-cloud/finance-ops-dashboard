@@ -818,12 +818,13 @@ function toBalanceMovement(row: DbBalanceMovement): BalanceMovement {
 }
 
 function balanceRowsForMonth(month: string | null, dbRows: DbBalanceMovement[]) {
-  if (month === "2026-05") return mayBalanceMovements;
-  if (month) return [];
-
   const currentRows = month
     ? dbRows.filter((row) => row.month === month)
     : dbRows;
+
+  if (currentRows.length > 0) return currentRows.map(toBalanceMovement);
+  if (month === "2026-05") return mayBalanceMovements;
+  if (month) return [];
 
   return currentRows.map(toBalanceMovement);
 }
@@ -1061,7 +1062,7 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
   }
 }
 
-export const getDashboardData = unstable_cache(loadDashboardData, ["finance-dashboard-data-v12"], {
+export const getDashboardData = unstable_cache(loadDashboardData, ["finance-dashboard-data-v13"], {
   revalidate: 300,
   tags: ["dashboard-data"]
 });
