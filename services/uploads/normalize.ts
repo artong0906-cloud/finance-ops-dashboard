@@ -92,7 +92,15 @@ const bankClassificationContextKeys = [
   "거래점명",
   "거래점"
 ];
-const knownBankAccountIds = new Set(["BANK_AD_001", "BANK_PLATFORM_001", "BANK_PARTNER_001", "BANK_COMMON_001", "BANK_CMA_001"]);
+const knownBankAccountIds = new Set([
+  "BANK_AD_001",
+  "BANK_PLATFORM_001",
+  "BANK_PLATFORM_REVENUE_001",
+  "BANK_PARTNER_001",
+  "BANK_PARTNER_IBK_001",
+  "BANK_COMMON_001",
+  "BANK_CMA_001"
+]);
 
 function compact(value: string) {
   return String(value || "").normalize("NFC").replace(/\s/g, "").toLowerCase();
