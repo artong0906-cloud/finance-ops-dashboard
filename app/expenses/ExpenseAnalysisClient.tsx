@@ -228,6 +228,41 @@ function editableDetailOptions(category: EditableExpenseCategory) {
   return [];
 }
 
+function manualCategoryFromMemo(row: Transaction, persistedText: string) {
+  const manualPrefix = normalizeText("수동분류:");
+  if (!persistedText.includes(manualPrefix)) return undefined;
+
+  const category = categoryLabels.find((label) => persistedText.includes(normalizeText(`수동분류:${label}`)));
+  if (!category) return undefined;
+
+  if (category === "인재투자") {
+    const manualTalentType = talentLabels.find((label) => persistedText.includes(normalizeText(label)))
+      || (talentLabels.includes(row.talentInvestmentType as (typeof talentLabels)[number])
+        ? row.talentInvestmentType as (typeof talentLabels)[number]
+        : undefined);
+    return {
+      category,
+      detail: manualTalentType || "인투1 집"
+    };
+  }
+
+  if (category === "운영비") {
+    const operatingType = operatingLabels.find((label) => persistedText.includes(normalizeText(label)))
+      || (operatingLabels.includes(row.detailCategory as (typeof operatingLabels)[number])
+        ? row.detailCategory as (typeof operatingLabels)[number]
+        : undefined);
+    return {
+      category,
+      detail: operatingType || "일반운영비"
+    };
+  }
+
+  return {
+    category,
+    detail: row.detailCategory && row.detailCategory !== "미분류" ? row.detailCategory : category
+  };
+}
+
 function resolveCategory(row: Transaction, talentType?: (typeof talentLabels)[number]) {
   const text = rowText(row);
   const isBankWithdrawal = row.source === "은행";
@@ -241,6 +276,11 @@ function resolveCategory(row: Transaction, talentType?: (typeof talentLabels)[nu
   ].filter(Boolean).join(" "));
   const persistedTalentCode = resolveTalentCode(row);
   const persistedTalentType = persistedTalentCode ? talentLabelByCode[persistedTalentCode] : talentType;
+  const manualCategory = manualCategoryFromMemo(row, persistedText);
+
+  if (manualCategory) {
+    return manualCategory;
+  }
 
   if (persistedText.includes(normalizeText("매출환불"))
     || persistedText.includes(normalizeText("수동분류: 환불"))
@@ -382,7 +422,7 @@ function resolveCategory(row: Transaction, talentType?: (typeof talentLabels)[nu
       detail: includesAny(text, ["이자", "대출이자"]) ? "이자"
         : includesAny(text, ["대외협력"]) || row.businessUnit === "대외협력" ? "대외협력부 운영비"
           : includesAny(text, ["공통사용분", "공통운영비"]) || row.businessUnit === "공통사용분" ? "공통운영비"
-            : "일반 운영비"
+            : "일반운영비"
     };
   }
 
