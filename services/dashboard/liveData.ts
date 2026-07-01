@@ -59,6 +59,10 @@ type DbRawUploadRow = {
 };
 
 type DbMappingRule = UserMappingRule;
+type BankRawContext = {
+  context: string;
+  displayDescription?: string;
+};
 
 async function fetchAllTransactions(admin: ReturnType<typeof createAdminClient>) {
   const pageSize = 1000;
@@ -304,6 +308,15 @@ const rawBankContextKeys = [
   "거래점명",
   "거래점"
 ];
+const rawBankDisplayDescriptionKeys = [
+  "거래적요",
+  "입금의뢰인",
+  "출금계좌인자내용",
+  "상대계좌예금주명",
+  "상대예금주명",
+  "거래내용",
+  "적요"
+];
 const knownBankAccountIds = new Set([
   "BANK_AD_001",
   "BANK_PLATFORM_001",
@@ -370,7 +383,7 @@ function readContextValues(record: Record<string, unknown>, keys: string[]) {
 }
 
 function buildBankRawContextLookup(rawRows: DbRawUploadRow[]) {
-  const lookup = new Map<string, string[]>();
+  const lookup = new Map<string, BankRawContext[]>();
 
   rawRows.forEach((rawRow) => {
     const rawData = toLookupRecord(rawRow.raw_data);
@@ -388,10 +401,11 @@ function buildBankRawContextLookup(rawRows: DbRawUploadRow[]) {
     if (!key) return;
 
     const context = readContextValues(rawData, rawBankContextKeys);
-    if (!context) return;
+    const displayDescription = readRecordValue(rawData, rawBankDisplayDescriptionKeys);
+    if (!context && !displayDescription) return;
 
     const current = lookup.get(key) || [];
-    current.push(context);
+    current.push({ context, displayDescription: displayDescription || undefined });
     lookup.set(key, current);
   });
 
@@ -412,7 +426,7 @@ function consumeCardIssuer(row: DbTransaction, lookup?: Map<string, string[]>) {
   return values?.shift();
 }
 
-function consumeBankRawContext(row: DbTransaction, lookup?: Map<string, string[]>) {
+function consumeBankRawContext(row: DbTransaction, lookup?: Map<string, BankRawContext[]>) {
   if (!lookup || row.source !== "은행") return undefined;
 
   const key = transactionLookupKey({
@@ -687,16 +701,18 @@ function applyTemporaryMayUnit(row: DbTransaction, transaction: Transaction): Tr
   };
 }
 
-function classificationMemo(row: DbTransaction, bankRawContext?: string) {
+function classificationMemo(row: DbTransaction, bankRawContext?: BankRawContext) {
+  const context = bankRawContext?.context;
+
   if (row.source !== "은행") {
-    return [row.memo, bankRawContext].filter(Boolean).join(" ");
+    return [row.memo, context].filter(Boolean).join(" ");
   }
 
   return String(row.memo || "")
     .split("/")
     .map((part) => part.trim())
     .filter((part) => !/^(원본시트|계좌번호|잔액|first-pass)\s*:/i.test(part))
-    .concat(bankRawContext ? [bankRawContext] : [])
+    .concat(context ? [context] : [])
     .join(" ");
 }
 
@@ -705,7 +721,7 @@ function toTransaction(
   cardIssuerLookup?: Map<string, string[]>,
   mappingRules: UserMappingRule[] = [],
   bankAccountLookup?: Map<string, string[]>,
-  bankRawContextLookup?: Map<string, string[]>
+  bankRawContextLookup?: Map<string, BankRawContext[]>
 ): Transaction {
   const cardBudgetGroup = row.card_budget_group || consumeCardIssuer(row, cardIssuerLookup) || undefined;
   const accountId = consumeBankAccount(row, bankAccountLookup);
@@ -754,6 +770,7 @@ function toTransaction(
     cardIssuer: cardBudgetGroup,
     vendor: row.vendor || "-",
     description: row.description || row.vendor || "-",
+    rawDescription: bankRawContext?.displayDescription || undefined,
     amount: toNumber(row.amount),
     cashFlowType: row.cash_flow_type || "제외",
     mainCategory: normalizeTalentLabel(useFirstPass ? firstPass.mainCategory : row.main_category) || "미분류",
@@ -1044,7 +1061,7 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
   }
 }
 
-export const getDashboardData = unstable_cache(loadDashboardData, ["finance-dashboard-data-v10"], {
+export const getDashboardData = unstable_cache(loadDashboardData, ["finance-dashboard-data-v11"], {
   revalidate: 300,
   tags: ["dashboard-data"]
 });

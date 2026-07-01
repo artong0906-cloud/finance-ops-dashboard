@@ -16,6 +16,7 @@ export type Transaction = {
   cardIssuer?: string;
   vendor: string;
   description: string;
+  rawDescription?: string;
   amount: number;
   cashFlowType: CashFlowType;
   mainCategory: string;
