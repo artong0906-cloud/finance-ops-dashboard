@@ -55,7 +55,9 @@ export type UserMappingRule = {
 const units: BusinessUnitValue[] = ["광고사업부", "플랫폼", "대외협력", "공통사용분", "미배분"];
 
 const accountRules: { keywords: string[]; accountId: string; businessUnit: BusinessUnitValue }[] = [
-  { keywords: ["BANK_PLATFORM_001", "19013209204016", "기업은행(플랫폼)", "기업(190", "기업(190~", "190~", "190132"], accountId: "BANK_PLATFORM_001", businessUnit: "플랫폼" },
+  { keywords: ["BANK_PARTNER_IBK_001", "19013209204023", "190-132092-04-023", "대협팀 계좌", "대협팀", "대외협력팀 계좌", "대외협력팀"], accountId: "BANK_PARTNER_IBK_001", businessUnit: "대외협력" },
+  { keywords: ["BANK_PLATFORM_REVENUE_001", "1107021986235", "110-702-1986235", "플랫폼 매출 계좌", "플랫폼매출계좌", "광주은행 플랫폼"], accountId: "BANK_PLATFORM_REVENUE_001", businessUnit: "플랫폼" },
+  { keywords: ["BANK_PLATFORM_001", "19013209204016", "190-132092-04-016", "플랫폼 지출계좌", "플랫폼지출계좌", "기업은행(플랫폼)"], accountId: "BANK_PLATFORM_001", businessUnit: "플랫폼" },
   { keywords: ["BANK_PARTNER_001", "12691002911604", "12691002745704", "하나은행", "하나,", "하나은행(~11604", "하나은행(~45704", "11604", "45704"], accountId: "BANK_PARTNER_001", businessUnit: "대외협력" },
   { keywords: ["BANK_COMMON_001", "100037330273", "신한", "신한,한투", "신한,한투 입출금"], accountId: "BANK_COMMON_001", businessUnit: "공통사용분" },
   { keywords: ["BANK_CMA_001", "한국투자", "한국투자증권", "한투", "한투CMA", "CMA"], accountId: "BANK_CMA_001", businessUnit: "공통사용분" },
@@ -109,6 +111,11 @@ const loanKeywords = [
 const internalTransferKeywords = [
   "29812261804018",
   "19013209204016",
+  "190-132092-04-016",
+  "19013209204023",
+  "190-132092-04-023",
+  "1107021986235",
+  "110-702-1986235",
   "100037330273",
   "12691002911604",
   "12691002745704",

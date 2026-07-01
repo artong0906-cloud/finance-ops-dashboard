@@ -304,7 +304,15 @@ const rawBankContextKeys = [
   "거래점명",
   "거래점"
 ];
-const knownBankAccountIds = new Set(["BANK_AD_001", "BANK_PLATFORM_001", "BANK_PARTNER_001", "BANK_COMMON_001", "BANK_CMA_001"]);
+const knownBankAccountIds = new Set([
+  "BANK_AD_001",
+  "BANK_PLATFORM_001",
+  "BANK_PLATFORM_REVENUE_001",
+  "BANK_PARTNER_001",
+  "BANK_PARTNER_IBK_001",
+  "BANK_COMMON_001",
+  "BANK_CMA_001"
+]);
 
 function transactionLookupKey(input: {
   date?: unknown;
@@ -440,6 +448,26 @@ function inferBankAccountIdFromRawRow(rawRow: DbRawUploadRow) {
 
 function derivedBankAccounts(): BankAccount[] {
   return [
+    {
+      id: "BANK_PARTNER_IBK_001",
+      bankName: "기업은행",
+      accountName: "대협팀 계좌",
+      maskedNo: "***4023",
+      businessUnit: "대외협력",
+      purpose: "대외협력팀 매출/운영",
+      previousBalance: 0,
+      currentBalance: 0
+    },
+    {
+      id: "BANK_PLATFORM_REVENUE_001",
+      bankName: "광주은행",
+      accountName: "플랫폼 매출 계좌",
+      maskedNo: "***6235",
+      businessUnit: "플랫폼",
+      purpose: "플랫폼 매출",
+      previousBalance: 0,
+      currentBalance: 0
+    },
     {
       id: "BANK_CMA_001",
       bankName: "한국투자증권",
@@ -1016,7 +1044,7 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
   }
 }
 
-export const getDashboardData = unstable_cache(loadDashboardData, ["finance-dashboard-data-v7"], {
+export const getDashboardData = unstable_cache(loadDashboardData, ["finance-dashboard-data-v8"], {
   revalidate: 300,
   tags: ["dashboard-data"]
 });
