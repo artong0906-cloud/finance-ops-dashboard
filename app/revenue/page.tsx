@@ -376,7 +376,7 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
     category,
     accountLabel: row.accountName || row.accountId || row.source,
     vendor: row.vendor,
-    description: row.description,
+    description: row.rawDescription || row.description,
     rule,
     amount,
     originalAmount: row.amount,
