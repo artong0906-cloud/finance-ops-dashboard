@@ -38,7 +38,9 @@ const miscKeywords = [
   "캐시백",
   "조수인",
   "영업외수익",
-  "이자수익"
+  "이자수익",
+  "결산이자",
+  "이자"
 ];
 const loanExecutionKeywords = ["대출실행", "대출금입금", "대출금 입금", "신규대출", "차입금입금", "차입금 입금", "단기차입금", "장기차입금", "차입"];
 const excludedRevenueDepositKeywords = [
@@ -211,15 +213,22 @@ function isExcludedRevenueDeposit(row: Transaction) {
 }
 
 function classifyRevenue(row: Transaction): Pick<RevenueRow, "category" | "rule"> {
-  const explicitCategory = explicitRevenueCategory(row);
+  const manualCategory = manualRevenueCategory(row);
   const governmentSupportKeyword = matchedGovernmentSupportKeyword(row);
   const miscKeyword = matchedMiscKeyword(row);
+  const explicitCategory = revenueCategoryFromText([
+    row.businessUnit,
+    row.mainCategory,
+    row.subCategory,
+    row.detailCategory,
+    row.memo
+  ].filter(Boolean).join(" "));
   const mainCategory = normalizeText(row.mainCategory);
 
-  if (explicitCategory) {
+  if (manualCategory) {
     return {
-      category: explicitCategory,
-      rule: normalizeText(row.memo).includes(normalizeText("수동분류")) ? "수동 변경 기준" : "저장된 분류 기준"
+      category: manualCategory,
+      rule: "수동 변경 기준"
     };
   }
 
@@ -241,6 +250,13 @@ function classifyRevenue(row: Transaction): Pick<RevenueRow, "category" | "rule"
     return {
       category: "기타매출",
       rule: "영업외수익 기준: 기타매출"
+    };
+  }
+
+  if (explicitCategory) {
+    return {
+      category: explicitCategory,
+      rule: "저장된 분류 기준"
     };
   }
 

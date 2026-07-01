@@ -524,6 +524,7 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
         detail_category: firstPass.detailCategory,
         talent_investment_type: firstPass.talentInvestmentType || null,
         expense_basis: firstPass.expenseBasis,
+        bank_classification_context: bankClassificationContext || null,
         review_status: firstPass.reviewStatus,
         matched_rule: firstPass.matchedRule
       },

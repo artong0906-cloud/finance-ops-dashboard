@@ -81,6 +81,8 @@ const governmentIncomeKeywords = [
 const miscIncomeKeywords = [
   "영업외수익",
   "이자수익",
+  "결산이자",
+  "이자",
   "환급",
   "매출취소",
   "대여금상환",
@@ -340,14 +342,20 @@ export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserM
       matchedRule: "bank-misc-income"
     });
   } else if (hasSalesDepositSignal) {
+    const salesSubCategory = result.businessUnit === "플랫폼"
+      ? "플랫폼 매출"
+      : result.businessUnit === "대외협력"
+        ? "대외협력팀 매출"
+        : includesAny(text, ["플랫폼"])
+          ? "플랫폼 매출"
+          : includesAny(text, ["대외협력", "대협팀"])
+            ? "대외협력팀 매출"
+            : "광고사업부 매출";
+
     apply({
       businessUnit: result.businessUnit === "미배분" || result.businessUnit === "공통사용분" ? "광고사업부" : result.businessUnit,
       mainCategory: "매출",
-      subCategory: includesAny(text, ["플랫폼"]) || result.businessUnit === "플랫폼"
-        ? "플랫폼 매출"
-        : result.businessUnit === "대외협력" || includesAny(text, ["대외협력"])
-          ? "대외협력팀 매출"
-          : "광고사업부 매출",
+      subCategory: salesSubCategory,
       detailCategory: originalMain === "미분류" ? "입금 매출" : originalMain,
       expenseBasis: "해당없음",
       reviewStatus: "정상",
@@ -493,12 +501,21 @@ export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserM
   const userRule = findUserMappingRule(input, userMappingRules);
   if (userRule) {
     const nextBusinessUnit = normalizeBusinessUnit(userRule.business_unit || result.businessUnit);
+    const nextMainCategory = userRule.main_category?.trim() || result.mainCategory;
+    const nextSubCategory = userRule.sub_category?.trim() || result.subCategory;
+    const nextDetailCategory = userRule.detail_category?.trim() || result.detailCategory;
+    const ruleMarksInternalTransfer = includesAny(
+      compact([nextMainCategory, nextSubCategory, nextDetailCategory].join(" ")),
+      ["계좌이체", "계좌간이동", "통장간이동", "중복집계제외"]
+    );
+
     apply({
       businessUnit: nextBusinessUnit,
-      mainCategory: userRule.main_category?.trim() || result.mainCategory,
-      subCategory: userRule.sub_category?.trim() || result.subCategory,
-      detailCategory: userRule.detail_category?.trim() || result.detailCategory,
-      expenseBasis: normalizeExpenseBasis(userRule.expense_basis) || result.expenseBasis,
+      mainCategory: nextMainCategory,
+      subCategory: nextSubCategory,
+      detailCategory: nextDetailCategory,
+      expenseBasis: ruleMarksInternalTransfer ? "해당없음" : normalizeExpenseBasis(userRule.expense_basis) || result.expenseBasis,
+      isInternalTransfer: ruleMarksInternalTransfer ? true : result.isInternalTransfer,
       isCommonUse: nextBusinessUnit === "공통사용분" ? true : result.isCommonUse,
       commonPolicy: nextBusinessUnit === "공통사용분" ? result.commonPolicy || "광고사업부 제외" : result.commonPolicy,
       reviewStatus: "정상",
