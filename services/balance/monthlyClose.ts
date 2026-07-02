@@ -3,11 +3,14 @@ import { endingAmount } from "@/services/dashboard/calculations";
 import type { BalanceMovement, BankAccount, Transaction } from "@/types/finance";
 
 export type AssetApplyMode = "exclude" | "as_is" | "depreciate";
+export type AssetApplyTarget = "new" | "existing";
 
 export type AssetApplySelection = {
   transactionId: string;
   mode: AssetApplyMode;
+  assetTarget?: AssetApplyTarget;
   assetCategory?: string;
+  assetName?: string;
   monthlyDepreciation?: number;
 };
 
@@ -114,6 +117,20 @@ function normalizeAssetCategory(value: unknown) {
   return "유형자산";
 }
 
+function normalizeAssetName(value: unknown, row: Transaction, assetCategory: string) {
+  const assetName = String(value || "").trim();
+  if (assetName) return assetName;
+
+  const sourceName = [
+    row.vendor,
+    row.rawDescription || row.description,
+    row.detailCategory && row.detailCategory !== "미분류" ? row.detailCategory : row.mainCategory
+  ].filter(Boolean).join(" ");
+
+  if (/버거킹|인테리어/.test(sourceName)) return "버거킹 인테리어";
+  return sourceName || assetCategory;
+}
+
 function isExcludedLoanPassThrough(row: Transaction) {
   const text = transactionText(row);
   return includesAny(text, [
@@ -148,13 +165,15 @@ function appliedAssetRows(month: string, transactions: Transaction[], selections
     rows.push({
       month,
       statement_type: "자산",
-      category: normalizeAssetCategory(selection.assetCategory),
+      category: normalizeAssetName(selection.assetName, row, normalizeAssetCategory(selection.assetCategory)),
       opening_amount: 0,
       increase_amount: row.amount,
       decrease_amount: monthlyDepreciation,
       memo: [
         "6월 자산성 지출 반영",
         `거래ID:${row.id}`,
+        `자산분류:${normalizeAssetCategory(selection.assetCategory)}`,
+        selection.assetTarget === "existing" ? "기존 자산 증액" : "신규 자산",
         row.detailCategory && row.detailCategory !== "미분류" ? row.detailCategory : row.mainCategory,
         selection.mode === "depreciate" ? `감가상각 적용 · 당월 ${monthlyDepreciation.toLocaleString("ko-KR")}원` : "그대로 반영",
         row.vendor,
@@ -164,6 +183,35 @@ function appliedAssetRows(month: string, transactions: Transaction[], selections
   });
 
   return rows;
+}
+
+function aggregateAssetRows(rows: BalanceMovementInsert[]) {
+  const grouped = new Map<string, BalanceMovementInsert>();
+  const result: BalanceMovementInsert[] = [];
+
+  rows.forEach((row) => {
+    if (row.statement_type !== "자산") {
+      result.push(row);
+      return;
+    }
+
+    const key = [row.month, row.statement_type, row.category].join("::");
+    const current = grouped.get(key);
+    if (!current) {
+      const clone = { ...row };
+      grouped.set(key, clone);
+      result.push(clone);
+      return;
+    }
+
+    current.opening_amount += row.opening_amount;
+    current.increase_amount += row.increase_amount;
+    current.decrease_amount += row.decrease_amount;
+    const memos = [current.memo, row.memo].filter(Boolean) as string[];
+    current.memo = Array.from(new Set(memos.flatMap((memo) => memo.split(" / ")))).slice(0, 10).join(" / ");
+  });
+
+  return result;
 }
 
 function loanRows(month: string, transactions: Transaction[]): BalanceMovementInsert[] {
@@ -208,10 +256,10 @@ export function buildMonthlyBalanceRows({
     .filter((row) => !isCashAsset(row))
     .map((row) => toOpeningRow(month, row));
 
-  return [
+  return aggregateAssetRows([
     ...carryForwardRows,
     ...cashRows(month, bankAccounts, baseRows),
     ...loanRows(month, transactions),
     ...appliedAssetRows(month, transactions, selections)
-  ];
+  ]);
 }

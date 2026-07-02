@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { AssetCandidateApplyClient, type AssetCandidateRow } from "./AssetCandidateApplyClient";
+import { AssetCandidateApplyClient, type AssetCandidateRow, type ExistingAssetOption } from "./AssetCandidateApplyClient";
 import { AppShell } from "@/components/layout/AppShell";
 import { chartColors, DonutPanel, equityColor, FinancialCard, outflowColor, StackedBar } from "@/components/shared/FinanceViz";
 import { resolveMonthParam, type MonthSearchParams } from "@/lib/month-filter";
@@ -158,6 +158,11 @@ function balanceGroupSegments(rows: BalanceViewRow[], order: string[], bankAccou
     .filter((segment) => segment.amount > 0);
 }
 
+function memoValue(memo: string | null | undefined, key: string) {
+  const pattern = new RegExp(`${key}:([^·/]+)`);
+  return memo?.match(pattern)?.[1]?.trim();
+}
+
 function appliedAssetInfo(row: Transaction, appliedRows: BalanceMovement[]) {
   const rowDescription = row.rawDescription || row.description;
   const rowVendor = compact(row.vendor);
@@ -180,9 +185,27 @@ function appliedAssetInfo(row: Transaction, appliedRows: BalanceMovement[]) {
   return {
     applied: true,
     appliedMode: inferredMatch.decreaseAmount > 0 ? "depreciate" as const : "as_is" as const,
-    appliedAssetCategory: inferredMatch.category,
+    appliedAssetTarget: compact(inferredMatch.memo).includes(compact("기존 자산 증액")) ? "existing" as const : "new" as const,
+    appliedAssetCategory: memoValue(inferredMatch.memo, "자산분류") || inferredMatch.category,
+    appliedAssetName: inferredMatch.category,
     appliedMonthlyDepreciation: inferredMatch.decreaseAmount
   };
+}
+
+function existingAssetOptions(rows: BalanceViewRow[]): ExistingAssetOption[] {
+  const options = rows
+    .filter((row) => (
+      row.statementType === "자산"
+      && row.group !== "현금성자산"
+      && row.category
+    ))
+    .map((row) => ({
+      name: row.category,
+      category: row.group
+    }));
+
+  return Array.from(new Map(options.map((option) => [option.name, option])).values())
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function assetCandidateRows(rows: Transaction[], month: string, balanceMovements: BalanceMovement[]): AssetCandidateRow[] {
@@ -427,7 +450,11 @@ export default async function BalancePage({
       </section>
 
       {activeMonth === "2026-06" ? (
-        <AssetCandidateApplyClient month={activeMonth} rows={assetCandidateRows(transactions, activeMonth, balanceMovements)} />
+        <AssetCandidateApplyClient
+          existingAssetOptions={existingAssetOptions(assets)}
+          month={activeMonth}
+          rows={assetCandidateRows(transactions, activeMonth, balanceMovements)}
+        />
       ) : null}
 
       <section className="mb-6 grid grid-cols-2 gap-4 max-xl:grid-cols-1">
