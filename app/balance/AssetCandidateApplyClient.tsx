@@ -19,11 +19,28 @@ type ApplyMode = "exclude" | "as_is" | "depreciate";
 
 type RowState = {
   mode: ApplyMode;
+  assetCategory: string;
   monthlyDepreciation: number;
 };
 
+const assetCategoryOptions = ["현금성자산", "차량가액", "보증금", "대여금", "광고비", "유형자산", "무형자산", "기타자산"] as const;
+
 function defaultMonthlyDepreciation(amount: number) {
-  return Math.round(amount / 60);
+  return Math.round(amount * 0.4);
+}
+
+function defaultAssetCategory(row: AssetCandidateRow) {
+  if (assetCategoryOptions.includes(row.category as (typeof assetCategoryOptions)[number])) return row.category;
+
+  const text = [row.category, row.vendor, row.description].filter(Boolean).join(" ");
+  if (/현금|예금|통장|증권|공제부금/.test(text)) return "현금성자산";
+  if (/차량|자동차|리스/.test(text)) return "차량가액";
+  if (/보증금|임차/.test(text)) return "보증금";
+  if (/대여금|투자금/.test(text)) return "대여금";
+  if (/광고|메조|역량/.test(text)) return "광고비";
+  if (/무형|앱|웹|소프트웨어|지식재산|특허|상표/.test(text)) return "무형자산";
+  if (/토지|비품|시설|장비|집기|인테리어|사옥|건물/.test(text)) return "유형자산";
+  return "유형자산";
 }
 
 export function AssetCandidateApplyClient({
@@ -37,6 +54,7 @@ export function AssetCandidateApplyClient({
   const [rowState, setRowState] = useState<Record<string, RowState>>(() => (
     Object.fromEntries(rows.map((row) => [row.id, {
       mode: "exclude" as ApplyMode,
+      assetCategory: defaultAssetCategory(row),
       monthlyDepreciation: defaultMonthlyDepreciation(row.amount)
     }]))
   ));
@@ -47,14 +65,23 @@ export function AssetCandidateApplyClient({
   const selectedTotal = selectedRows.reduce((sum, row) => sum + row.amount, 0);
 
   function updateRow(id: string, next: Partial<RowState>) {
+    const row = rows.find((item) => item.id === id);
     setRowState((current) => ({
       ...current,
       [id]: {
         mode: current[id]?.mode || "exclude",
-        monthlyDepreciation: current[id]?.monthlyDepreciation || defaultMonthlyDepreciation(rows.find((row) => row.id === id)?.amount || 0),
+        assetCategory: current[id]?.assetCategory || (row ? defaultAssetCategory(row) : "유형자산"),
+        monthlyDepreciation: current[id]?.monthlyDepreciation || defaultMonthlyDepreciation(row?.amount || 0),
         ...next
       }
     }));
+  }
+
+  function updateMode(row: AssetCandidateRow, mode: ApplyMode) {
+    updateRow(row.id, {
+      mode,
+      monthlyDepreciation: mode === "depreciate" ? defaultMonthlyDepreciation(row.amount) : rowState[row.id]?.monthlyDepreciation || defaultMonthlyDepreciation(row.amount)
+    });
   }
 
   async function applyBalance() {
@@ -70,6 +97,7 @@ export function AssetCandidateApplyClient({
           selections: Object.entries(rowState).map(([transactionId, state]) => ({
             transactionId,
             mode: state.mode,
+            assetCategory: state.assetCategory,
             monthlyDepreciation: state.monthlyDepreciation
           }))
         })
@@ -122,13 +150,14 @@ export function AssetCandidateApplyClient({
               <th>적요</th>
               <th>분류</th>
               <th className="text-right">금액</th>
+              <th>자산 카테고리</th>
               <th>반영 방식</th>
               <th className="text-right">당월 감가</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => {
-              const state = rowState[row.id] || { mode: "exclude", monthlyDepreciation: defaultMonthlyDepreciation(row.amount) };
+              const state = rowState[row.id] || { mode: "exclude", assetCategory: defaultAssetCategory(row), monthlyDepreciation: defaultMonthlyDepreciation(row.amount) };
               return (
                 <tr key={row.id}>
                   <td>{row.date}</td>
@@ -141,8 +170,20 @@ export function AssetCandidateApplyClient({
                   <td className="text-right font-black">{formatKRW(row.amount)}</td>
                   <td>
                     <select
+                      className="field min-w-32"
+                      disabled={state.mode === "exclude"}
+                      onChange={(event) => updateRow(row.id, { assetCategory: event.target.value })}
+                      value={state.assetCategory}
+                    >
+                      {assetCategoryOptions.map((category) => (
+                        <option key={category} value={category}>{category}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <select
                       className="field min-w-36"
-                      onChange={(event) => updateRow(row.id, { mode: event.target.value as ApplyMode })}
+                      onChange={(event) => updateMode(row, event.target.value as ApplyMode)}
                       value={state.mode}
                     >
                       <option value="exclude">반영 제외</option>
@@ -165,7 +206,7 @@ export function AssetCandidateApplyClient({
             })}
             {rows.length === 0 ? (
               <tr>
-                <td className="py-8 text-center font-bold text-slate-500" colSpan={7}>
+                <td className="py-8 text-center font-bold text-slate-500" colSpan={8}>
                   표시할 자산성 지출 후보가 없습니다.
                 </td>
               </tr>
