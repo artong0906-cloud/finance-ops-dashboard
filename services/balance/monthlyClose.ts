@@ -105,6 +105,16 @@ function transactionText(row: Transaction) {
   ].filter(Boolean).join(" "));
 }
 
+function isExcludedLoanPassThrough(row: Transaction) {
+  const text = transactionText(row);
+  return includesAny(text, [
+    "b00003",
+    "12698016728842",
+    "급여",
+    "프리급여"
+  ]);
+}
+
 export function assetExpenseCandidates(transactions: Transaction[], month: string) {
   return transactions.filter((row) => (
     row.date.startsWith(month)
@@ -153,6 +163,7 @@ function loanRows(month: string, transactions: Transaction[]): BalanceMovementIn
         && row.source === "은행"
         && row.cashFlowType === "입금"
         && !row.isInternalTransfer
+        && !isExcludedLoanPassThrough(row)
         && (row.mainCategory === "부채"
           || includesAny(text, ["대출", "차입", "신규대출", "대출실행", "대출금입금", "차입금입금"]));
     })
