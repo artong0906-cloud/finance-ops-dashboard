@@ -160,7 +160,28 @@ function appliedAssetRows(month: string, transactions: Transaction[], selections
 
   assetExpenseCandidates(transactions, month).forEach((row) => {
     const selection = selectionById.get(row.id);
-    if (!selection || selection.mode === "exclude") return;
+    if (!selection) return;
+
+    if (selection.mode === "exclude") {
+      rows.push({
+        month,
+        statement_type: "자산",
+        category: `__자산반영제외__:${row.id}`,
+        opening_amount: 0,
+        increase_amount: 0,
+        decrease_amount: 0,
+        memo: [
+          "6월 자산성 지출 반영 제외",
+          `거래ID:${row.id}`,
+          `자산분류:${normalizeAssetCategory(selection.assetCategory)}`,
+          "반영 제외",
+          row.detailCategory && row.detailCategory !== "미분류" ? row.detailCategory : row.mainCategory,
+          row.vendor,
+          row.rawDescription || row.description
+        ].filter(Boolean).join(" · ")
+      });
+      return;
+    }
 
     const monthlyDepreciation = selection.mode === "depreciate"
       ? Math.max(0, Math.round(Number(selection.monthlyDepreciation || row.amount * 0.4)))
@@ -195,6 +216,11 @@ function aggregateAssetRows(rows: BalanceMovementInsert[]) {
 
   rows.forEach((row) => {
     if (row.statement_type !== "자산") {
+      result.push(row);
+      return;
+    }
+
+    if (row.category.startsWith("__자산반영제외__:")) {
       result.push(row);
       return;
     }

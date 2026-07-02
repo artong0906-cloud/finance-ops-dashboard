@@ -149,13 +149,13 @@ export function AssetCandidateApplyClient({
   }
 
   function statusLabel(row: AssetCandidateRow, state: RowState) {
-    if (row.applied && state.mode === "exclude") return "반영 해제 예정";
+    if (row.applied && row.appliedMode !== "exclude" && state.mode === "exclude") return "반영 해제 예정";
     if (!row.applied && state.mode !== "exclude") return "반영 예정";
     return row.applied ? "반영완료" : "반영미완료";
   }
 
   function statusClass(row: AssetCandidateRow, state: RowState) {
-    if (row.applied && state.mode === "exclude") return "badge badge-warning";
+    if (row.applied && row.appliedMode !== "exclude" && state.mode === "exclude") return "badge badge-warning";
     if (!row.applied && state.mode !== "exclude") return "badge badge-good";
     return row.applied ? "badge badge-good" : "badge badge-muted";
   }
