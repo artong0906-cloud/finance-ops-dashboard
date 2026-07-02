@@ -163,11 +163,26 @@ function memoValue(memo: string | null | undefined, key: string) {
   return memo?.match(pattern)?.[1]?.trim();
 }
 
+function appliedMemoSegments(memo: string | null | undefined) {
+  return String(memo || "")
+    .split(" / ")
+    .map((segment) => segment.trim())
+    .filter((segment) => compact(segment).includes(compact("자산성 지출 반영")));
+}
+
+function parseDepreciationFromMemo(memo: string | null | undefined) {
+  const matched = String(memo || "").match(/당월\s*([\d,]+)원/);
+  return matched ? Number(matched[1].replace(/,/g, "")) : 0;
+}
+
 function appliedAssetInfo(row: Transaction, appliedRows: BalanceMovement[]) {
   const rowDescription = row.rawDescription || row.description;
   const rowVendor = compact(row.vendor);
   const rowMemo = compact(rowDescription);
   const directMatch = appliedRows.find((movement) => compact(movement.memo).includes(compact(`거래ID:${row.id}`)));
+  const directSegment = directMatch
+    ? appliedMemoSegments(directMatch.memo).find((segment) => compact(segment).includes(compact(`거래ID:${row.id}`)))
+    : undefined;
   const inferredMatch = directMatch || appliedRows.find((movement) => {
     const memo = compact(movement.memo);
     const vendorMatched = rowVendor.length === 0 || memo.includes(rowVendor);
@@ -184,12 +199,76 @@ function appliedAssetInfo(row: Transaction, appliedRows: BalanceMovement[]) {
 
   return {
     applied: true,
-    appliedMode: inferredMatch.decreaseAmount > 0 ? "depreciate" as const : "as_is" as const,
-    appliedAssetTarget: compact(inferredMatch.memo).includes(compact("기존 자산 증액")) ? "existing" as const : "new" as const,
-    appliedAssetCategory: memoValue(inferredMatch.memo, "자산분류") || inferredMatch.category,
+    appliedMode: compact(directSegment || inferredMatch.memo).includes(compact("감가상각 적용")) ? "depreciate" as const : "as_is" as const,
+    appliedAssetTarget: compact(directSegment || inferredMatch.memo).includes(compact("기존 자산 증액")) ? "existing" as const : "new" as const,
+    appliedAssetCategory: memoValue(directSegment || inferredMatch.memo, "자산분류") || inferredMatch.category,
     appliedAssetName: inferredMatch.category,
-    appliedMonthlyDepreciation: inferredMatch.decreaseAmount
+    appliedMonthlyDepreciation: directSegment ? parseDepreciationFromMemo(directSegment) : inferredMatch.decreaseAmount
   };
+}
+
+function parsedAppliedAssetDetails(memo: string) {
+  return appliedMemoSegments(memo).map((segment) => {
+    const parts = segment.split(" · ").map((part) => part.trim()).filter(Boolean);
+    const method = parts.find((part) => part.includes("감가상각") || part.includes("그대로 반영")) || "-";
+    const transactionId = memoValue(segment, "거래ID") || "-";
+    const assetCategory = memoValue(segment, "자산분류") || "-";
+    const sourceCategory = parts.find((part) => !part.includes(":") && !part.includes("자산성 지출") && !part.includes("자산") && !part.includes("감가상각") && !part.includes("그대로 반영")) || "-";
+    const tail = parts.slice(-2);
+
+    return {
+      transactionId,
+      assetCategory,
+      sourceCategory,
+      method,
+      vendor: tail[0] || "-",
+      description: tail[1] || "-"
+    };
+  });
+}
+
+function MemoCell({ memo }: { memo: string }) {
+  const appliedDetails = parsedAppliedAssetDetails(memo);
+  const baseMemo = memo.split(" / ").find((part) => !compact(part).includes(compact("자산성 지출 반영"))) || memo;
+
+  if (appliedDetails.length === 0) return <>{memo}</>;
+
+  return (
+    <div className="min-w-80">
+      <div>{baseMemo}</div>
+      <details className="mt-2 rounded-lg border border-slate-200 bg-slate-50">
+        <summary className="cursor-pointer list-none px-3 py-2 text-xs font-black text-blue-700 [&::-webkit-details-marker]:hidden">
+          반영 거래 {appliedDetails.length.toLocaleString("ko-KR")}건 보기
+        </summary>
+        <div className="border-t border-slate-200 bg-white p-2">
+          <table className="min-w-[720px]">
+            <thead>
+              <tr>
+                <th>자산분류</th>
+                <th>원분류</th>
+                <th>거래처</th>
+                <th>적요</th>
+                <th>반영방식</th>
+                <th>거래ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {appliedDetails.map((detail) => (
+                <tr key={detail.transactionId}>
+                  <td>{detail.assetCategory}</td>
+                  <td>{detail.sourceCategory}</td>
+                  <td>{detail.vendor}</td>
+                  <td>{detail.description}</td>
+                  <td>{detail.method}</td>
+                  <td className="text-xs text-slate-400">{detail.transactionId}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  );
 }
 
 function existingAssetOptions(rows: BalanceViewRow[]): ExistingAssetOption[] {
@@ -356,7 +435,7 @@ function BalanceGroupSection({
                             <td className="text-right">{displayAmount(row.increaseAmount)}</td>
                             <td className="text-right">{displayAmount(row.decreaseAmount)}</td>
                             <td className="text-right font-black">{formatKRW(row.ending)}</td>
-                            <td>{row.memo}</td>
+                            <td><MemoCell memo={row.memo} /></td>
                           </tr>
                         ))}
                       </tbody>
@@ -488,7 +567,7 @@ export default async function BalancePage({
                   <td className="text-right">{formatKRW(row.increaseAmount)}</td>
                   <td className="text-right">{formatKRW(row.decreaseAmount)}</td>
                   <td className="text-right font-black">{formatKRW(row.ending)}</td>
-                  <td>{row.memo || "-"}</td>
+                  <td><MemoCell memo={row.memo || "-"} /></td>
                 </tr>
               ))}
             </tbody>
