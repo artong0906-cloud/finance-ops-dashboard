@@ -154,6 +154,7 @@ function appliedAssetRows(month: string, transactions: Transaction[], selections
       decrease_amount: monthlyDepreciation,
       memo: [
         "6월 자산성 지출 반영",
+        `거래ID:${row.id}`,
         row.detailCategory && row.detailCategory !== "미분류" ? row.detailCategory : row.mainCategory,
         selection.mode === "depreciate" ? `감가상각 적용 · 당월 ${monthlyDepreciation.toLocaleString("ko-KR")}원` : "그대로 반영",
         row.vendor,

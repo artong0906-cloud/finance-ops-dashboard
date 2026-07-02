@@ -13,9 +13,14 @@ export type AssetCandidateRow = {
   amount: number;
   businessUnit: string;
   category: string;
+  applied: boolean;
+  appliedMode?: ApplyMode;
+  appliedAssetCategory?: string;
+  appliedMonthlyDepreciation?: number;
 };
 
 type ApplyMode = "exclude" | "as_is" | "depreciate";
+type StatusFilter = "all" | "applied" | "pending";
 
 type RowState = {
   mode: ApplyMode;
@@ -53,16 +58,24 @@ export function AssetCandidateApplyClient({
   const router = useRouter();
   const [rowState, setRowState] = useState<Record<string, RowState>>(() => (
     Object.fromEntries(rows.map((row) => [row.id, {
-      mode: "exclude" as ApplyMode,
-      assetCategory: defaultAssetCategory(row),
-      monthlyDepreciation: 0
+      mode: row.appliedMode || "exclude" as ApplyMode,
+      assetCategory: row.appliedAssetCategory || defaultAssetCategory(row),
+      monthlyDepreciation: row.appliedMonthlyDepreciation ?? 0
     }]))
   ));
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const selectedRows = useMemo(() => rows.filter((row) => rowState[row.id]?.mode !== "exclude"), [rows, rowState]);
   const selectedTotal = selectedRows.reduce((sum, row) => sum + row.amount, 0);
+  const appliedRows = rows.filter((row) => row.applied);
+  const pendingRows = rows.filter((row) => !row.applied);
+  const visibleRows = useMemo(() => rows.filter((row) => {
+    if (statusFilter === "applied") return row.applied;
+    if (statusFilter === "pending") return !row.applied;
+    return true;
+  }), [rows, statusFilter]);
 
   function updateRow(id: string, next: Partial<RowState>) {
     const row = rows.find((item) => item.id === id);
@@ -82,6 +95,18 @@ export function AssetCandidateApplyClient({
       mode,
       monthlyDepreciation: mode === "depreciate" ? defaultMonthlyDepreciation(row.amount) : 0
     });
+  }
+
+  function statusLabel(row: AssetCandidateRow, state: RowState) {
+    if (row.applied && state.mode === "exclude") return "반영 해제 예정";
+    if (!row.applied && state.mode !== "exclude") return "반영 예정";
+    return row.applied ? "반영완료" : "반영미완료";
+  }
+
+  function statusClass(row: AssetCandidateRow, state: RowState) {
+    if (row.applied && state.mode === "exclude") return "badge badge-warning";
+    if (!row.applied && state.mode !== "exclude") return "badge badge-good";
+    return row.applied ? "badge badge-good" : "badge badge-muted";
   }
 
   async function applyBalance() {
@@ -141,10 +166,28 @@ export function AssetCandidateApplyClient({
         <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm font-bold text-slate-700">{message}</div>
       ) : null}
 
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {[
+          { key: "all" as const, label: "전체", count: rows.length },
+          { key: "applied" as const, label: "반영완료", count: appliedRows.length },
+          { key: "pending" as const, label: "반영미완료", count: pendingRows.length }
+        ].map((item) => (
+          <button
+            className={`btn btn-sm ${statusFilter === item.key ? "btn-primary" : ""}`}
+            key={item.key}
+            onClick={() => setStatusFilter(item.key)}
+            type="button"
+          >
+            {item.label} {item.count.toLocaleString("ko-KR")}건
+          </button>
+        ))}
+      </div>
+
       <div className="table-wrap mt-4">
         <table>
           <thead>
             <tr>
+              <th>반영상태</th>
               <th>일자</th>
               <th>거래처</th>
               <th>적요</th>
@@ -156,10 +199,11 @@ export function AssetCandidateApplyClient({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
+            {visibleRows.map((row) => {
               const state = rowState[row.id] || { mode: "exclude", assetCategory: defaultAssetCategory(row), monthlyDepreciation: 0 };
               return (
                 <tr key={row.id}>
+                  <td><span className={statusClass(row, state)}>{statusLabel(row, state)}</span></td>
                   <td>{row.date}</td>
                   <td className="font-black">{row.vendor}</td>
                   <td>
@@ -203,9 +247,9 @@ export function AssetCandidateApplyClient({
                 </tr>
               );
             })}
-            {rows.length === 0 ? (
+            {visibleRows.length === 0 ? (
               <tr>
-                <td className="py-8 text-center font-bold text-slate-500" colSpan={8}>
+                <td className="py-8 text-center font-bold text-slate-500" colSpan={9}>
                   표시할 자산성 지출 후보가 없습니다.
                 </td>
               </tr>
