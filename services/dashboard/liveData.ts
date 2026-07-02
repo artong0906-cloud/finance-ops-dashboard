@@ -800,6 +800,98 @@ function toTransaction(
   return applyTemporaryMayUnit(row, transaction);
 }
 
+const cardCancellationOffsetMemo = "카드 취소 원결제 상쇄: 지출 집계 제외";
+
+function normalizeCardMatchText(value: unknown) {
+  return String(value || "")
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "")
+    .replace(/주식회사|유한회사|㈜/g, "");
+}
+
+function cardAmount(value: unknown) {
+  const amount = Number(value || 0);
+  return Number.isFinite(amount) ? Math.round(Math.abs(amount)) : 0;
+}
+
+function dateDistanceDays(left: string, right: string) {
+  const leftTime = new Date(left).getTime();
+  const rightTime = new Date(right).getTime();
+  if (!Number.isFinite(leftTime) || !Number.isFinite(rightTime)) return Number.POSITIVE_INFINITY;
+  return Math.abs(leftTime - rightTime) / 86_400_000;
+}
+
+function cardTextMatches(cancelRow: Transaction, purchaseRow: Transaction) {
+  const cancelVendor = normalizeCardMatchText(cancelRow.vendor);
+  const purchaseVendor = normalizeCardMatchText(purchaseRow.vendor);
+  const cancelDescription = normalizeCardMatchText(cancelRow.description);
+  const purchaseDescription = normalizeCardMatchText(purchaseRow.description);
+
+  return Boolean(
+    (cancelVendor && purchaseVendor && (cancelVendor.includes(purchaseVendor) || purchaseVendor.includes(cancelVendor)))
+    || (cancelDescription && purchaseDescription && (cancelDescription.includes(purchaseDescription) || purchaseDescription.includes(cancelDescription)))
+    || (cancelVendor && purchaseDescription && purchaseDescription.includes(cancelVendor))
+    || (purchaseVendor && cancelDescription && cancelDescription.includes(purchaseVendor))
+  );
+}
+
+function canOffsetCardCancellation(cancelRow: Transaction, purchaseRow: Transaction) {
+  if (cardAmount(cancelRow.amount) !== cardAmount(purchaseRow.amount)) return false;
+
+  const cancelCard = normalizeCardMatchText(cancelRow.cardBudgetGroup);
+  const purchaseCard = normalizeCardMatchText(purchaseRow.cardBudgetGroup);
+  if (cancelCard && purchaseCard && cancelCard !== purchaseCard) return false;
+  if (!cardTextMatches(cancelRow, purchaseRow)) return false;
+
+  const distance = dateDistanceDays(cancelRow.date, purchaseRow.date);
+  if (distance > 45) return false;
+
+  return purchaseRow.date <= cancelRow.date || distance <= 3;
+}
+
+function applyCardCancellationOffsets(transactions: Transaction[]) {
+  const cancellations = transactions
+    .filter((row) => row.source === "카드" && row.cashFlowType === "제외" && (row.mainCategory === "카드취소" || row.memo?.includes("카드 음수")))
+    .sort((left, right) => left.date.localeCompare(right.date));
+  const purchases = transactions
+    .filter((row) => row.source === "카드" && row.cashFlowType === "출금")
+    .sort((left, right) => left.date.localeCompare(right.date));
+  const offsetPurchaseIds = new Set<string>();
+
+  cancellations.forEach((cancelRow) => {
+    const match = purchases
+      .filter((purchaseRow) => !offsetPurchaseIds.has(purchaseRow.id) && canOffsetCardCancellation(cancelRow, purchaseRow))
+      .sort((left, right) => {
+        const leftIsPrior = left.date <= cancelRow.date ? 0 : 1;
+        const rightIsPrior = right.date <= cancelRow.date ? 0 : 1;
+        return leftIsPrior - rightIsPrior || dateDistanceDays(left.date, cancelRow.date) - dateDistanceDays(right.date, cancelRow.date);
+      })[0];
+
+    if (match) offsetPurchaseIds.add(match.id);
+  });
+
+  if (offsetPurchaseIds.size === 0) return transactions;
+
+  return transactions.map((row) => {
+    if (!offsetPurchaseIds.has(row.id)) return row;
+
+    return {
+      ...row,
+      cashFlowType: "제외",
+      mainCategory: "카드취소",
+      subCategory: "원결제 상쇄",
+      detailCategory: cardCancellationOffsetMemo,
+      talentInvestmentType: undefined,
+      expenseBasis: "해당없음",
+      isCommonUse: false,
+      commonPolicy: undefined,
+      reviewStatus: "정상",
+      memo: row.memo ? `${row.memo} / ${cardCancellationOffsetMemo}` : cardCancellationOffsetMemo
+    };
+  });
+}
+
 function toBankAccount(row: DbBankAccount): BankAccount {
   const fallback = mockBankAccounts.find((item) => item.id === row.id);
   return {
@@ -1028,11 +1120,15 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
       currentMonth
     );
 
+    const transactions = applyCardCancellationOffsets(
+      currentTransactions.map((row) => toTransaction(row, cardIssuerLookup, mappingRules, bankAccountLookup, bankRawContextLookup))
+    );
+
     return {
       mode: "live",
       currentMonth,
       availableMonths,
-      transactions: currentTransactions.map((row) => toTransaction(row, cardIssuerLookup, mappingRules, bankAccountLookup, bankRawContextLookup)),
+      transactions,
       bankAccounts,
       balanceMovements: balanceRowsForMonth(currentMonth, dbBalanceMovements),
       previousBalanceMovements: balanceRowsForMonth(previousMonthKey(currentMonth), dbBalanceMovements),
