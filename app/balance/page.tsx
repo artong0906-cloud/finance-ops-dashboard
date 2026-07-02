@@ -170,6 +170,11 @@ function appliedMemoSegments(memo: string | null | undefined) {
     .filter((segment) => compact(segment).includes(compact("자산성 지출 반영")));
 }
 
+function isAssetApplyDecisionMarker(row: BalanceMovement) {
+  return row.category.startsWith("__자산반영제외__:")
+    || compact(row.memo).includes(compact("자산성 지출 반영 제외"));
+}
+
 function parseDepreciationFromMemo(memo: string | null | undefined) {
   const matched = String(memo || "").match(/당월\s*([\d,]+)원/);
   return matched ? Number(matched[1].replace(/,/g, "")) : 0;
@@ -199,10 +204,12 @@ function appliedAssetInfo(row: Transaction, appliedRows: BalanceMovement[]) {
 
   return {
     applied: true,
-    appliedMode: compact(directSegment || inferredMatch.memo).includes(compact("감가상각 적용")) ? "depreciate" as const : "as_is" as const,
+    appliedMode: compact(directSegment || inferredMatch.memo).includes(compact("반영 제외"))
+      ? "exclude" as const
+      : compact(directSegment || inferredMatch.memo).includes(compact("감가상각 적용")) ? "depreciate" as const : "as_is" as const,
     appliedAssetTarget: compact(directSegment || inferredMatch.memo).includes(compact("기존 자산 증액")) ? "existing" as const : "new" as const,
     appliedAssetCategory: memoValue(directSegment || inferredMatch.memo, "자산분류") || inferredMatch.category,
-    appliedAssetName: inferredMatch.category,
+    appliedAssetName: isAssetApplyDecisionMarker(inferredMatch) ? undefined : inferredMatch.category,
     appliedMonthlyDepreciation: directSegment ? parseDepreciationFromMemo(directSegment) : inferredMatch.decreaseAmount
   };
 }
@@ -467,7 +474,8 @@ export default async function BalancePage({
   const data = await getDashboardData(selectedMonth);
   const { balanceMovements, bankAccounts, transactions } = data;
   const activeMonth = data.currentMonth || "2026-05";
-  const viewRows = toViewRows(balanceMovements);
+  const visibleBalanceMovements = balanceMovements.filter((row) => !isAssetApplyDecisionMarker(row));
+  const viewRows = toViewRows(visibleBalanceMovements);
   const assets = viewRows.filter((row) => row.statementType === "자산");
   const liabilities = viewRows.filter((row) => row.statementType === "부채");
   const cashRows = assets.filter((row) => row.group === "현금성자산");
