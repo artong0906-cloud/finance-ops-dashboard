@@ -344,7 +344,8 @@ function getAmountAndFlow(row: Record<string, string>, uploadType: UploadType) {
   }
 
   const amount = parseAmount(pick(row, amountKeys));
-  if (uploadType === "card") return { amount: Math.abs(amount), cashFlowType: "출금" as const };
+  if (uploadType === "card" && amount < 0) return { amount: Math.abs(amount), cashFlowType: "제외" as const, isNegativeCardAmount: true };
+  if (uploadType === "card") return { amount: Math.abs(amount), cashFlowType: "출금" as const, isNegativeCardAmount: false };
   if (amount < 0) return { amount: Math.abs(amount), cashFlowType: "출금" as const };
   if (flowHint.includes("출금") || flowHint.includes("지급") || flowHint === "출") return { amount: Math.abs(amount), cashFlowType: "출금" as const };
   if (flowHint.includes("입금") || flowHint.includes("수입") || flowHint === "입") return { amount: Math.abs(amount), cashFlowType: "입금" as const };
@@ -446,7 +447,7 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
     const transactionDate = normalizeDate(pick(row, dateKeys), detectedMonth);
     const vendor = pick(row, vendorKeys) || null;
     const description = pick(row, descriptionKeys) || vendor || null;
-    const { amount, cashFlowType } = getAmountAndFlow(row, uploadType);
+    const { amount, cashFlowType, isNegativeCardAmount } = getAmountAndFlow(row, uploadType);
     const businessUnit = normalizeBusinessUnit(pick(row, businessUnitKeys));
     const accountId = uploadType === "bank" ? pick(row, bankAccountKeys) || null : null;
     const accountLookupText = uploadType === "bank" ? [accountId, sheetName].filter(Boolean).join(" ") : accountId;
@@ -464,7 +465,7 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
     const parseStatus = missing.length === 0 ? "정상" : "확인필요";
     const baseMemo = inferMemo(missing);
     const source = sourceByType(uploadType);
-    const firstPass = classifyFirstPass({
+    const firstPassBase = classifyFirstPass({
       source,
       businessUnit,
       accountId: accountLookupText,
@@ -477,9 +478,25 @@ export function normalizeUploadRows(uploadType: UploadType, rows: Record<string,
       subCategory,
       memo: [baseMemo, sheetName, bankClassificationContext].filter(Boolean).join(" ")
     }, userMappingRules);
+    const firstPass = uploadType === "card" && isNegativeCardAmount
+      ? {
+          ...firstPassBase,
+          mainCategory: "카드취소",
+          subCategory: "취소/환급",
+          detailCategory: mainCategory || "카드 음수 원본",
+          talentInvestmentType: undefined,
+          expenseBasis: "해당없음" as ExpenseBasisValue,
+          isCommonUse: false,
+          commonPolicy: undefined,
+          reviewStatus: "정상" as const,
+          confidence: 0.95,
+          matchedRule: "card-negative-amount-excluded"
+        }
+      : firstPassBase;
     const accountIdForDb = persistedAccountId(uploadType, firstPass.accountId || accountId);
     const autoMemo = `1차분류: ${firstPass.matchedRule}`;
-    const memo = [baseMemo, autoMemo].filter(Boolean).join(" / ") || null;
+    const exclusionMemo = uploadType === "card" && isNegativeCardAmount ? "카드 음수 원본: 지출 집계 제외" : null;
+    const memo = [baseMemo, autoMemo, exclusionMemo].filter(Boolean).join(" / ") || null;
 
     const transaction = transactionDate && amount
       ? {

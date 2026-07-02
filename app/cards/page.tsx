@@ -15,7 +15,7 @@ export default async function CardsPage({
   const selectedMonth = resolveMonthParam(params);
   const data = await getDashboardData(selectedMonth);
   const { transactions } = data;
-  const cardRows = transactions.filter((row) => row.source === "카드");
+  const cardRows = transactions.filter((row) => row.source === "카드" && row.cashFlowType === "출금" && !row.isInternalTransfer);
   const total = sumBy(cardRows, (row) => row.amount);
   const grouped = Array.from(
     cardRows.reduce((acc, row) => {

@@ -314,7 +314,20 @@ export function classifyFirstPass(input: FirstPassInput, userMappingRules: UserM
     });
   };
 
-  if (source === "은행" && hasInternalTransferSignal(internalTransferText) && !hasLoanIncomeSignal && !hasGovernmentIncomeSignal && !hasMiscIncomeSignal && !hasSalesDepositSignal) {
+  if (cashFlowType === "제외" || originalMain === "카드취소") {
+    apply({
+      mainCategory: originalMain === "미분류" ? "카드취소" : originalMain,
+      subCategory: originalSub === "미분류" ? "취소/환급" : originalSub,
+      detailCategory: originalDetail === "미분류" ? "지출 집계 제외" : originalDetail,
+      expenseBasis: "해당없음",
+      isInternalTransfer: false,
+      isCommonUse: false,
+      commonPolicy: undefined,
+      reviewStatus: "정상",
+      confidence: 0.95,
+      matchedRule: "excluded-cash-flow"
+    });
+  } else if (source === "은행" && hasInternalTransferSignal(internalTransferText) && !hasLoanIncomeSignal && !hasGovernmentIncomeSignal && !hasMiscIncomeSignal && !hasSalesDepositSignal) {
     apply({
       businessUnit: result.businessUnit === "미배분" ? "공통사용분" : result.businessUnit,
       mainCategory: includesAny(text, ["카드미지급비용", "카드대금"]) ? "카드대금" : "계좌이체",
