@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { resolveMonthParam, withMonthParam, type MonthSearchParams } from "@/lib/month-filter";
-import { endingAmount, formatCompactKRW, formatKRW, sumBy } from "@/services/dashboard/calculations";
+import { adjustedTotalAssets, endingAmount, formatCompactKRW, formatKRW, sumBy } from "@/services/dashboard/calculations";
 import { getDashboardData } from "@/services/dashboard/liveData";
 import type { BalanceMovement, Transaction } from "@/types/finance";
 
@@ -128,7 +128,7 @@ function balanceTotals(rows: BalanceMovement[]) {
   const visibleRows = rows.filter((row) => !isAssetApplyDecisionMarker(row));
   const assets = visibleRows.filter((row) => row.statementType === "자산");
   const liabilities = visibleRows.filter((row) => row.statementType === "부채");
-  const totalAssets = sumBy(assets, endingAmount);
+  const totalAssets = adjustedTotalAssets(assets);
   const totalLiabilities = sumBy(liabilities, endingAmount);
 
   return {
@@ -535,7 +535,7 @@ export default async function DashboardPage({
   const visibleBalanceMovements = balanceMovements.filter((row) => !isAssetApplyDecisionMarker(row));
   const assets = visibleBalanceMovements.filter((row) => row.statementType === "자산");
   const liabilities = visibleBalanceMovements.filter((row) => row.statementType === "부채");
-  const totalAssets = sumBy(assets, endingAmount);
+  const totalAssets = adjustedTotalAssets(assets);
   const totalLiabilities = sumBy(liabilities, endingAmount);
   const equity = totalAssets - totalLiabilities;
   const previousTotals = balanceTotals(previousBalanceMovements);

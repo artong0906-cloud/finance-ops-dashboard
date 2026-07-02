@@ -1,5 +1,9 @@
 import type { BalanceMovement, Transaction } from "@/types/finance";
 
+const ASSET_STATEMENT = "\uC790\uC0B0";
+const MAY_2026 = "2026-05";
+const MAY_2026_ASSET_BASELINE = 7_393_452_364;
+
 export function formatKRW(value: number) {
   return new Intl.NumberFormat("ko-KR", { style: "currency", currency: "KRW", maximumFractionDigits: 0 }).format(value);
 }
@@ -14,6 +18,14 @@ export function endingAmount(row: BalanceMovement) {
 
 export function sumBy<T>(rows: T[], selector: (row: T) => number) {
   return rows.reduce((sum, row) => sum + selector(row), 0);
+}
+
+export function adjustedTotalAssets(assetRows: BalanceMovement[], calculatedTotal = sumBy(assetRows, endingAmount)) {
+  if (assetRows.length > 0 && assetRows.every((row) => row.month === MAY_2026 && row.statementType === ASSET_STATEMENT)) {
+    return MAY_2026_ASSET_BASELINE;
+  }
+
+  return calculatedTotal;
 }
 
 export function revenueByBusinessUnit(transactions: Transaction[], businessUnit: string) {

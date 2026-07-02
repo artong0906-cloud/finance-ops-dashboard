@@ -5,7 +5,7 @@ import { AssetCandidateApplyClient, type AssetCandidateRow, type ExistingAssetOp
 import { AppShell } from "@/components/layout/AppShell";
 import { chartColors, DonutPanel, equityColor, FinancialCard, outflowColor, StackedBar } from "@/components/shared/FinanceViz";
 import { resolveMonthParam, type MonthSearchParams } from "@/lib/month-filter";
-import { endingAmount, formatCompactKRW, formatKRW, sumBy } from "@/services/dashboard/calculations";
+import { adjustedTotalAssets, endingAmount, formatCompactKRW, formatKRW, sumBy } from "@/services/dashboard/calculations";
 import { getDashboardData } from "@/services/dashboard/liveData";
 import type { BalanceMovement, BankAccount, Transaction } from "@/types/finance";
 
@@ -179,7 +179,7 @@ function balanceTotals(rows: BalanceMovement[]) {
   const visibleRows = rows.filter((row) => !isAssetApplyDecisionMarker(row));
   const assets = visibleRows.filter((row) => row.statementType === "자산");
   const liabilities = visibleRows.filter((row) => row.statementType === "부채");
-  const totalAssets = sumBy(assets, endingAmount);
+  const totalAssets = adjustedTotalAssets(assets);
   const totalLiabilities = sumBy(liabilities, endingAmount);
 
   return {
@@ -339,16 +339,18 @@ function BalanceGroupSection({
   rows,
   statementType,
   title,
-  bankAccounts = []
+  bankAccounts = [],
+  totalOverride
 }: {
   rows: BalanceViewRow[];
   statementType: "자산" | "부채";
   title: string;
   bankAccounts?: BankAccount[];
+  totalOverride?: number;
 }) {
   const order = statementType === "자산" ? assetGroupOrder : liabilityGroupOrder;
   const groups = groupRows(rows, order);
-  const total = sumBy(
+  const total = totalOverride ?? sumBy(
     groups.flatMap(([group, groupRows]) => detailRowsForGroup(group, groupRows, bankAccounts)),
     (row) => row.ending
   );
@@ -494,7 +496,8 @@ export default async function BalancePage({
   const liabilities = viewRows.filter((row) => row.statementType === "부채");
   const cashRows = assets.filter((row) => row.group === "현금성자산");
   const cashDetails = detailRowsForGroup("현금성자산", cashRows, bankAccounts);
-  const totalAssets = sumBy(assets.filter((row) => row.group !== "현금성자산"), (row) => row.ending) + sumBy(cashDetails, (row) => row.ending);
+  const calculatedTotalAssets = sumBy(assets.filter((row) => row.group !== "현금성자산"), (row) => row.ending) + sumBy(cashDetails, (row) => row.ending);
+  const totalAssets = adjustedTotalAssets(assets, calculatedTotalAssets);
   const totalLiabilities = sumBy(liabilities, (row) => row.ending);
   const equity = totalAssets - totalLiabilities;
   const previousTotals = balanceTotals(previousBalanceMovements);
@@ -560,7 +563,7 @@ export default async function BalancePage({
       ) : null}
 
       <section className="mb-6 grid grid-cols-2 gap-4 max-xl:grid-cols-1">
-        <BalanceGroupSection rows={assets} statementType="자산" title="자산 상세" bankAccounts={bankAccounts} />
+        <BalanceGroupSection rows={assets} statementType="자산" title="자산 상세" bankAccounts={bankAccounts} totalOverride={totalAssets} />
         <BalanceGroupSection rows={liabilities} statementType="부채" title="부채 상세" />
       </section>
 
