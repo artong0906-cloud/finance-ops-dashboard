@@ -119,7 +119,11 @@ function normalizeAssetCategory(value: unknown) {
 
 function normalizeAssetName(value: unknown, row: Transaction, assetCategory: string) {
   const assetName = String(value || "").trim();
-  if (assetName) return assetName;
+  if (assetName) {
+    return assetName
+      .replace(/사무실\s*비품\s*\(2026년\)/, "사무실 비품 (2026년)")
+      .replace(/사무실\s*비품\s*\(2025년\)/, "사무실 비품 (2025년)");
+  }
 
   const sourceName = [
     row.vendor,

@@ -63,7 +63,7 @@ function defaultAssetName(row: AssetCandidateRow) {
 
   const text = [row.category, row.vendor, row.description].filter(Boolean).join(" ");
   if (/버거킹|인테리어/.test(text)) return "버거킹 인테리어";
-  if (/비품/.test(text)) return "사무실 비품(2026년)";
+  if (/비품/.test(text)) return "사무실 비품 (2026년)";
   return row.vendor || row.description || row.category || "신규 자산";
 }
 
