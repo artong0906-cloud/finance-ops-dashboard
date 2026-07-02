@@ -55,7 +55,7 @@ export function AssetCandidateApplyClient({
     Object.fromEntries(rows.map((row) => [row.id, {
       mode: "exclude" as ApplyMode,
       assetCategory: defaultAssetCategory(row),
-      monthlyDepreciation: defaultMonthlyDepreciation(row.amount)
+      monthlyDepreciation: 0
     }]))
   ));
   const [isSaving, setIsSaving] = useState(false);
@@ -71,7 +71,7 @@ export function AssetCandidateApplyClient({
       [id]: {
         mode: current[id]?.mode || "exclude",
         assetCategory: current[id]?.assetCategory || (row ? defaultAssetCategory(row) : "유형자산"),
-        monthlyDepreciation: current[id]?.monthlyDepreciation || defaultMonthlyDepreciation(row?.amount || 0),
+        monthlyDepreciation: current[id]?.monthlyDepreciation ?? 0,
         ...next
       }
     }));
@@ -80,7 +80,7 @@ export function AssetCandidateApplyClient({
   function updateMode(row: AssetCandidateRow, mode: ApplyMode) {
     updateRow(row.id, {
       mode,
-      monthlyDepreciation: mode === "depreciate" ? defaultMonthlyDepreciation(row.amount) : rowState[row.id]?.monthlyDepreciation || defaultMonthlyDepreciation(row.amount)
+      monthlyDepreciation: mode === "depreciate" ? defaultMonthlyDepreciation(row.amount) : 0
     });
   }
 
@@ -157,7 +157,7 @@ export function AssetCandidateApplyClient({
           </thead>
           <tbody>
             {rows.map((row) => {
-              const state = rowState[row.id] || { mode: "exclude", assetCategory: defaultAssetCategory(row), monthlyDepreciation: defaultMonthlyDepreciation(row.amount) };
+              const state = rowState[row.id] || { mode: "exclude", assetCategory: defaultAssetCategory(row), monthlyDepreciation: 0 };
               return (
                 <tr key={row.id}>
                   <td>{row.date}</td>
@@ -171,7 +171,6 @@ export function AssetCandidateApplyClient({
                   <td>
                     <select
                       className="field min-w-32"
-                      disabled={state.mode === "exclude"}
                       onChange={(event) => updateRow(row.id, { assetCategory: event.target.value })}
                       value={state.assetCategory}
                     >
