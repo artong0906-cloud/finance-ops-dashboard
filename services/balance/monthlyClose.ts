@@ -7,6 +7,7 @@ export type AssetApplyMode = "exclude" | "as_is" | "depreciate";
 export type AssetApplySelection = {
   transactionId: string;
   mode: AssetApplyMode;
+  assetCategory?: string;
   monthlyDepreciation?: number;
 };
 
@@ -105,6 +106,14 @@ function transactionText(row: Transaction) {
   ].filter(Boolean).join(" "));
 }
 
+function normalizeAssetCategory(value: unknown) {
+  const category = String(value || "").trim();
+  if (["현금성자산", "차량가액", "보증금", "대여금", "광고비", "유형자산", "무형자산", "기타자산"].includes(category)) {
+    return category;
+  }
+  return "유형자산";
+}
+
 function isExcludedLoanPassThrough(row: Transaction) {
   const text = transactionText(row);
   return includesAny(text, [
@@ -133,18 +142,19 @@ function appliedAssetRows(month: string, transactions: Transaction[], selections
     if (!selection || selection.mode === "exclude") return;
 
     const monthlyDepreciation = selection.mode === "depreciate"
-      ? Math.max(0, Math.round(Number(selection.monthlyDepreciation || row.amount / 60)))
+      ? Math.max(0, Math.round(Number(selection.monthlyDepreciation || row.amount * 0.4)))
       : 0;
 
     rows.push({
       month,
       statement_type: "자산",
-      category: row.detailCategory && row.detailCategory !== "미분류" ? row.detailCategory : row.vendor,
+      category: normalizeAssetCategory(selection.assetCategory),
       opening_amount: 0,
       increase_amount: row.amount,
       decrease_amount: monthlyDepreciation,
       memo: [
         "6월 자산성 지출 반영",
+        row.detailCategory && row.detailCategory !== "미분류" ? row.detailCategory : row.mainCategory,
         selection.mode === "depreciate" ? `감가상각 적용 · 당월 ${monthlyDepreciation.toLocaleString("ko-KR")}원` : "그대로 반영",
         row.vendor,
         row.rawDescription || row.description

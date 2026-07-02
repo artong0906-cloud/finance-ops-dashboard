@@ -28,6 +28,7 @@ function normalizeSelections(value: unknown): AssetApplySelection[] {
       return {
         transactionId,
         mode: normalizeMode(record.mode),
+        assetCategory: typeof record.assetCategory === "string" ? record.assetCategory : undefined,
         monthlyDepreciation: Number(record.monthlyDepreciation || 0)
       };
     })
