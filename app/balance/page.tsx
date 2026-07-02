@@ -158,7 +158,40 @@ function balanceGroupSegments(rows: BalanceViewRow[], order: string[], bankAccou
     .filter((segment) => segment.amount > 0);
 }
 
-function assetCandidateRows(rows: Transaction[], month: string): AssetCandidateRow[] {
+function appliedAssetInfo(row: Transaction, appliedRows: BalanceMovement[]) {
+  const rowDescription = row.rawDescription || row.description;
+  const rowVendor = compact(row.vendor);
+  const rowMemo = compact(rowDescription);
+  const directMatch = appliedRows.find((movement) => compact(movement.memo).includes(compact(`거래ID:${row.id}`)));
+  const inferredMatch = directMatch || appliedRows.find((movement) => {
+    const memo = compact(movement.memo);
+    const vendorMatched = rowVendor.length === 0 || memo.includes(rowVendor);
+    const descriptionKey = rowMemo.slice(0, 12);
+    const descriptionMatched = descriptionKey.length === 0 || memo.includes(descriptionKey);
+    return movement.increaseAmount === row.amount && vendorMatched && descriptionMatched;
+  });
+
+  if (!inferredMatch) {
+    return {
+      applied: false
+    };
+  }
+
+  return {
+    applied: true,
+    appliedMode: inferredMatch.decreaseAmount > 0 ? "depreciate" as const : "as_is" as const,
+    appliedAssetCategory: inferredMatch.category,
+    appliedMonthlyDepreciation: inferredMatch.decreaseAmount
+  };
+}
+
+function assetCandidateRows(rows: Transaction[], month: string, balanceMovements: BalanceMovement[]): AssetCandidateRow[] {
+  const appliedRows = balanceMovements.filter((row) => (
+    row.month === month
+    && row.statementType === "자산"
+    && compact(row.memo).includes(compact("자산성 지출 반영"))
+  ));
+
   return rows
     .filter((row) => (
       row.date.startsWith(month)
@@ -174,7 +207,8 @@ function assetCandidateRows(rows: Transaction[], month: string): AssetCandidateR
       description: row.rawDescription || row.description,
       amount: row.amount,
       businessUnit: row.businessUnit,
-      category: row.detailCategory && row.detailCategory !== "미분류" ? row.detailCategory : row.mainCategory
+      category: row.detailCategory && row.detailCategory !== "미분류" ? row.detailCategory : row.mainCategory,
+      ...appliedAssetInfo(row, appliedRows)
     }));
 }
 
@@ -393,7 +427,7 @@ export default async function BalancePage({
       </section>
 
       {activeMonth === "2026-06" ? (
-        <AssetCandidateApplyClient month={activeMonth} rows={assetCandidateRows(transactions, activeMonth)} />
+        <AssetCandidateApplyClient month={activeMonth} rows={assetCandidateRows(transactions, activeMonth, balanceMovements)} />
       ) : null}
 
       <section className="mb-6 grid grid-cols-2 gap-4 max-xl:grid-cols-1">
