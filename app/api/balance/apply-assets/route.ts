@@ -1,7 +1,7 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { buildMonthlyBalanceRows, type AssetApplyMode, type AssetApplySelection } from "@/services/balance/monthlyClose";
+import { buildMonthlyBalanceRows, type AssetApplyMode, type AssetApplySelection, type AssetApplyTarget } from "@/services/balance/monthlyClose";
 import { getDashboardData } from "@/services/dashboard/liveData";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +13,10 @@ function normalizeMonth(value: unknown) {
 
 function normalizeMode(value: unknown): AssetApplyMode {
   return value === "as_is" || value === "depreciate" ? value : "exclude";
+}
+
+function normalizeAssetTarget(value: unknown): AssetApplyTarget {
+  return value === "existing" ? "existing" : "new";
 }
 
 function normalizeSelections(value: unknown): AssetApplySelection[] {
@@ -28,7 +32,9 @@ function normalizeSelections(value: unknown): AssetApplySelection[] {
       return {
         transactionId,
         mode: normalizeMode(record.mode),
+        assetTarget: normalizeAssetTarget(record.assetTarget),
         assetCategory: typeof record.assetCategory === "string" ? record.assetCategory : undefined,
+        assetName: typeof record.assetName === "string" ? record.assetName : undefined,
         monthlyDepreciation: Number(record.monthlyDepreciation || 0)
       };
     })

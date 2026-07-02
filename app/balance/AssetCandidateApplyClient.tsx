@@ -15,16 +15,26 @@ export type AssetCandidateRow = {
   category: string;
   applied: boolean;
   appliedMode?: ApplyMode;
+  appliedAssetTarget?: AssetTarget;
   appliedAssetCategory?: string;
+  appliedAssetName?: string;
   appliedMonthlyDepreciation?: number;
 };
 
 type ApplyMode = "exclude" | "as_is" | "depreciate";
+type AssetTarget = "new" | "existing";
 type StatusFilter = "all" | "applied" | "pending";
+
+export type ExistingAssetOption = {
+  name: string;
+  category: string;
+};
 
 type RowState = {
   mode: ApplyMode;
+  assetTarget: AssetTarget;
   assetCategory: string;
+  assetName: string;
   monthlyDepreciation: number;
 };
 
@@ -48,18 +58,31 @@ function defaultAssetCategory(row: AssetCandidateRow) {
   return "유형자산";
 }
 
+function defaultAssetName(row: AssetCandidateRow) {
+  if (row.appliedAssetName) return row.appliedAssetName;
+
+  const text = [row.category, row.vendor, row.description].filter(Boolean).join(" ");
+  if (/버거킹|인테리어/.test(text)) return "버거킹 인테리어";
+  if (/비품/.test(text)) return "사무실 비품(2026년)";
+  return row.vendor || row.description || row.category || "신규 자산";
+}
+
 export function AssetCandidateApplyClient({
   month,
-  rows
+  rows,
+  existingAssetOptions
 }: {
   month: string;
   rows: AssetCandidateRow[];
+  existingAssetOptions: ExistingAssetOption[];
 }) {
   const router = useRouter();
   const [rowState, setRowState] = useState<Record<string, RowState>>(() => (
     Object.fromEntries(rows.map((row) => [row.id, {
       mode: row.appliedMode || "exclude" as ApplyMode,
+      assetTarget: row.appliedAssetTarget || "new" as AssetTarget,
       assetCategory: row.appliedAssetCategory || defaultAssetCategory(row),
+      assetName: row.appliedAssetName || defaultAssetName(row),
       monthlyDepreciation: row.appliedMonthlyDepreciation ?? 0
     }]))
   ));
@@ -83,11 +106,39 @@ export function AssetCandidateApplyClient({
       ...current,
       [id]: {
         mode: current[id]?.mode || "exclude",
+        assetTarget: current[id]?.assetTarget || "new",
         assetCategory: current[id]?.assetCategory || (row ? defaultAssetCategory(row) : "유형자산"),
+        assetName: current[id]?.assetName || (row ? defaultAssetName(row) : "신규 자산"),
         monthlyDepreciation: current[id]?.monthlyDepreciation ?? 0,
         ...next
       }
     }));
+  }
+
+  function updateAssetTarget(row: AssetCandidateRow, assetTarget: AssetTarget) {
+    if (assetTarget === "existing") {
+      const option = existingAssetOptions.find((item) => item.name === rowState[row.id]?.assetName) || existingAssetOptions[0];
+      updateRow(row.id, {
+        assetTarget,
+        assetName: option?.name || defaultAssetName(row),
+        assetCategory: option?.category || defaultAssetCategory(row)
+      });
+      return;
+    }
+
+    updateRow(row.id, {
+      assetTarget,
+      assetName: defaultAssetName(row),
+      assetCategory: defaultAssetCategory(row)
+    });
+  }
+
+  function updateExistingAsset(row: AssetCandidateRow, assetName: string) {
+    const option = existingAssetOptions.find((item) => item.name === assetName);
+    updateRow(row.id, {
+      assetName,
+      assetCategory: option?.category || rowState[row.id]?.assetCategory || defaultAssetCategory(row)
+    });
   }
 
   function updateMode(row: AssetCandidateRow, mode: ApplyMode) {
@@ -122,7 +173,9 @@ export function AssetCandidateApplyClient({
           selections: Object.entries(rowState).map(([transactionId, state]) => ({
             transactionId,
             mode: state.mode,
+            assetTarget: state.assetTarget,
             assetCategory: state.assetCategory,
+            assetName: state.assetName,
             monthlyDepreciation: state.monthlyDepreciation
           }))
         })
@@ -160,6 +213,7 @@ export function AssetCandidateApplyClient({
       <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm font-bold leading-6 text-blue-900">
         5월 자산·부채 항목을 기초로 복사하고, 현금성 자산은 6월 말 통장잔고와 지식재산 공제부금으로 업데이트합니다.
         신한은행 신규 대출 입금은 부채 증가로 함께 반영됩니다.
+        같은 자산명으로 반영된 항목은 하나의 자산으로 합산됩니다.
       </div>
 
       {message ? (
@@ -193,6 +247,8 @@ export function AssetCandidateApplyClient({
               <th>적요</th>
               <th>분류</th>
               <th className="text-right">금액</th>
+              <th>자산 구분</th>
+              <th>자산명</th>
               <th>자산 카테고리</th>
               <th>반영 방식</th>
               <th className="text-right">당월 감가</th>
@@ -200,7 +256,13 @@ export function AssetCandidateApplyClient({
           </thead>
           <tbody>
             {visibleRows.map((row) => {
-              const state = rowState[row.id] || { mode: "exclude", assetCategory: defaultAssetCategory(row), monthlyDepreciation: 0 };
+              const state = rowState[row.id] || {
+                mode: "exclude",
+                assetTarget: "new",
+                assetCategory: defaultAssetCategory(row),
+                assetName: defaultAssetName(row),
+                monthlyDepreciation: 0
+              };
               return (
                 <tr key={row.id}>
                   <td><span className={statusClass(row, state)}>{statusLabel(row, state)}</span></td>
@@ -212,6 +274,39 @@ export function AssetCandidateApplyClient({
                   </td>
                   <td><span className="badge badge-good">{row.category}</span></td>
                   <td className="text-right font-black">{formatKRW(row.amount)}</td>
+                  <td>
+                    <select
+                      className="field min-w-28"
+                      onChange={(event) => updateAssetTarget(row, event.target.value as AssetTarget)}
+                      value={state.assetTarget}
+                    >
+                      <option value="new">신규 자산</option>
+                      <option value="existing">기존 자산</option>
+                    </select>
+                  </td>
+                  <td>
+                    {state.assetTarget === "existing" ? (
+                      <select
+                        className="field min-w-48"
+                        onChange={(event) => updateExistingAsset(row, event.target.value)}
+                        value={state.assetName}
+                      >
+                        {existingAssetOptions.length === 0 ? (
+                          <option value={state.assetName}>{state.assetName}</option>
+                        ) : null}
+                        {existingAssetOptions.map((asset) => (
+                          <option key={asset.name} value={asset.name}>{asset.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        className="field min-w-48"
+                        onChange={(event) => updateRow(row.id, { assetName: event.target.value })}
+                        placeholder="예: 버거킹 인테리어"
+                        value={state.assetName}
+                      />
+                    )}
+                  </td>
                   <td>
                     <select
                       className="field min-w-32"
@@ -249,7 +344,7 @@ export function AssetCandidateApplyClient({
             })}
             {visibleRows.length === 0 ? (
               <tr>
-                <td className="py-8 text-center font-bold text-slate-500" colSpan={9}>
+                <td className="py-8 text-center font-bold text-slate-500" colSpan={11}>
                   표시할 자산성 지출 후보가 없습니다.
                 </td>
               </tr>
