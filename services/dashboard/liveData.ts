@@ -868,12 +868,20 @@ function canOffsetCardCancellation(cancelRow: Transaction, purchaseRow: Transact
 
 function applyCardCancellationOffsets(transactions: Transaction[]) {
   const cancellations = transactions
-    .filter((row) => row.source === "카드" && row.cashFlowType === "제외" && (row.mainCategory === "카드취소" || row.memo?.includes("카드 음수")))
+    .filter((row) => row.source === "카드" && row.cashFlowType === "제외" && (
+      row.memo?.includes("카드 음수")
+      || row.detailCategory.includes("카드 음수")
+      || row.subCategory === "취소/환급"
+    ))
     .sort((left, right) => left.date.localeCompare(right.date));
   const purchases = transactions
     .filter((row) => row.source === "카드" && row.cashFlowType === "출금")
     .sort((left, right) => left.date.localeCompare(right.date));
+  const alreadyOffsetPurchases = transactions
+    .filter((row) => row.source === "카드" && row.cashFlowType === "제외" && row.detailCategory === cardCancellationOffsetMemo)
+    .sort((left, right) => left.date.localeCompare(right.date));
   const offsetPurchaseIds = new Set<string>();
+  const partialCancellationIds = new Set<string>();
 
   cancellations.forEach((cancelRow) => {
     const match = purchases
@@ -884,12 +892,37 @@ function applyCardCancellationOffsets(transactions: Transaction[]) {
         return leftIsPrior - rightIsPrior || dateDistanceDays(left.date, cancelRow.date) - dateDistanceDays(right.date, cancelRow.date);
       })[0];
 
-    if (match) offsetPurchaseIds.add(match.id);
+    if (match) {
+      offsetPurchaseIds.add(match.id);
+      return;
+    }
+
+    const alreadyHandled = alreadyOffsetPurchases.some((purchaseRow) => canOffsetCardCancellation(cancelRow, purchaseRow));
+    if (alreadyHandled) return;
+
+    partialCancellationIds.add(cancelRow.id);
   });
 
-  if (offsetPurchaseIds.size === 0) return transactions;
+  if (offsetPurchaseIds.size === 0 && partialCancellationIds.size === 0) return transactions;
 
   return transactions.map((row) => {
+    if (partialCancellationIds.has(row.id)) {
+      return {
+        ...row,
+        amount: -cardAmount(row.amount),
+        cashFlowType: "출금",
+        mainCategory: "카드취소",
+        subCategory: "부분취소/환급",
+        detailCategory: "카드 부분취소 차감",
+        talentInvestmentType: undefined,
+        expenseBasis: "비용성",
+        isCommonUse: false,
+        commonPolicy: undefined,
+        reviewStatus: "정상",
+        memo: row.memo ? `${row.memo} / 카드 부분취소 차감` : "카드 부분취소 차감"
+      };
+    }
+
     if (!offsetPurchaseIds.has(row.id)) return row;
 
     return {
@@ -1187,7 +1220,7 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
   }
 }
 
-export const getDashboardData = unstable_cache(loadDashboardData, ["finance-dashboard-data-v14"], {
+export const getDashboardData = unstable_cache(loadDashboardData, ["finance-dashboard-data-v15"], {
   revalidate: 300,
   tags: ["dashboard-data"]
 });
