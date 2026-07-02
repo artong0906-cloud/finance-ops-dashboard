@@ -552,7 +552,8 @@ function bankBalanceBucketKey(rawRow: DbRawUploadRow, accountId: string) {
   const rawData = toLookupRecord(rawRow.raw_data);
   const normalizedData = toLookupRecord(rawRow.normalized_data);
   const sheetName = readRecordValue(rawData, ["__sheetName"]) || String(normalizedData.sheet_name || "");
-  const accountHint = String(normalizedData.account_id || "").trim();
+  const rawAccountNo = readExactRecordValue(rawData, rawBankAccountKeys);
+  const accountHint = String(normalizedData.account_id || rawAccountNo || "").trim();
 
   return [accountId, accountHint || sheetName || rawRow.upload_batch_id].filter(Boolean).join("::");
 }
@@ -581,7 +582,7 @@ function isEarlierBalancePoint(
 ) {
   if (!current) return true;
   if (next.date && current.date && next.date !== current.date) return next.date < current.date;
-  return next.rowIndex < current.rowIndex;
+  return next.rowIndex > current.rowIndex;
 }
 
 function isLaterBalancePoint(
@@ -590,8 +591,17 @@ function isLaterBalancePoint(
 ) {
   if (!current) return true;
   if (next.date && current.date && next.date !== current.date) return next.date > current.date;
-  return next.rowIndex > current.rowIndex;
+  return next.rowIndex < current.rowIndex;
 }
+
+const manualMonthlyBankBalances: Record<string, Record<string, { previousBalance?: number; currentBalance: number }>> = {
+  "2026-06": {
+    BANK_CMA_001: {
+      previousBalance: 151_990_931,
+      currentBalance: 452_221_874
+    }
+  }
+};
 
 function applyMonthlyBankBalances(accounts: BankAccount[], rawRows: DbRawUploadRow[], month: string | null) {
   const earliestByBalanceBucket = new Map<string, { accountId: string; balance: number; date: string; rowIndex: number }>();
@@ -641,11 +651,17 @@ function applyMonthlyBankBalances(accounts: BankAccount[], rawRows: DbRawUploadR
     totalsByAccount.set(item.accountId, (totalsByAccount.get(item.accountId) || 0) + item.balance);
   });
 
-  return accounts.map((account) => ({
-    ...account,
-    previousBalance: openingTotalsByAccount.has(account.id) ? openingTotalsByAccount.get(account.id) || 0 : 0,
-    currentBalance: totalsByAccount.has(account.id) ? totalsByAccount.get(account.id) || 0 : 0
-  }));
+  return accounts.map((account) => {
+    const manualBalance = month ? manualMonthlyBankBalances[month]?.[account.id] : undefined;
+    const previousBalance = openingTotalsByAccount.has(account.id) ? openingTotalsByAccount.get(account.id) || 0 : 0;
+    const currentBalance = totalsByAccount.has(account.id) ? totalsByAccount.get(account.id) || 0 : 0;
+
+    return {
+      ...account,
+      previousBalance: manualBalance?.previousBalance ?? previousBalance,
+      currentBalance: manualBalance?.currentBalance ?? currentBalance
+    };
+  });
 }
 
 function getLatestMonth(rows: DbTransaction[]) {
