@@ -119,6 +119,25 @@ function balanceChange(row: BalanceMovement) {
   return row.increaseAmount - row.decreaseAmount;
 }
 
+function isAssetApplyDecisionMarker(row: BalanceMovement) {
+  return row.category.startsWith("__자산반영제외__:")
+    || balanceText(row).includes(compact("자산성 지출 반영 제외"));
+}
+
+function balanceTotals(rows: BalanceMovement[]) {
+  const visibleRows = rows.filter((row) => !isAssetApplyDecisionMarker(row));
+  const assets = visibleRows.filter((row) => row.statementType === "자산");
+  const liabilities = visibleRows.filter((row) => row.statementType === "부채");
+  const totalAssets = sumBy(assets, endingAmount);
+  const totalLiabilities = sumBy(liabilities, endingAmount);
+
+  return {
+    totalAssets,
+    totalLiabilities,
+    equity: totalAssets - totalLiabilities
+  };
+}
+
 function isCashBalance(row: BalanceMovement) {
   const text = balanceText(row);
   return row.statementType === "자산" && includesAny(text, ["현금", "예금", "통장", "증권", "현금성", "선급금", "공제부금"]);
@@ -510,17 +529,19 @@ export default async function DashboardPage({
   const params = searchParams ? await searchParams : {};
   const selectedMonth = resolveMonthParam(params);
   const data = await getDashboardData(selectedMonth);
-  const { transactions, balanceMovements, bankAccounts } = data;
+  const { transactions, balanceMovements, previousBalanceMovements, bankAccounts } = data;
 
   const currentMonth = data.currentMonth || "2026-05";
-  const assets = balanceMovements.filter((row) => row.statementType === "자산");
-  const liabilities = balanceMovements.filter((row) => row.statementType === "부채");
+  const visibleBalanceMovements = balanceMovements.filter((row) => !isAssetApplyDecisionMarker(row));
+  const assets = visibleBalanceMovements.filter((row) => row.statementType === "자산");
+  const liabilities = visibleBalanceMovements.filter((row) => row.statementType === "부채");
   const totalAssets = sumBy(assets, endingAmount);
   const totalLiabilities = sumBy(liabilities, endingAmount);
   const equity = totalAssets - totalLiabilities;
-  const assetChange = sumBy(assets, balanceChange);
-  const liabilityChange = sumBy(liabilities, balanceChange);
-  const equityChange = assetChange - liabilityChange;
+  const previousTotals = balanceTotals(previousBalanceMovements);
+  const assetChange = previousBalanceMovements.length > 0 ? totalAssets - previousTotals.totalAssets : sumBy(assets, balanceChange);
+  const liabilityChange = previousBalanceMovements.length > 0 ? totalLiabilities - previousTotals.totalLiabilities : sumBy(liabilities, balanceChange);
+  const equityChange = previousBalanceMovements.length > 0 ? equity - previousTotals.equity : assetChange - liabilityChange;
 
   const cashRows = bankAccounts.map((account) => ({
     id: account.id,

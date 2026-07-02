@@ -211,6 +211,7 @@ export type DashboardData = {
   transactions: Transaction[];
   bankAccounts: BankAccount[];
   balanceMovements: BalanceMovement[];
+  previousBalanceMovements: BalanceMovement[];
   uploadBatches: UploadBatchSummary[];
   rawRows: RawRowSample[];
   rawRowCount: number;
@@ -667,6 +668,15 @@ function pickCurrentMonth(requestedMonth: string | undefined, availableMonths: s
   return availableMonths[0] || requestedMonth || null;
 }
 
+function previousMonthKey(month: string | null | undefined) {
+  if (!month || !/^\d{4}-\d{2}$/.test(month)) return null;
+
+  const [year, monthIndex] = month.split("-").map(Number);
+  const prevMonth = monthIndex === 1 ? 12 : monthIndex - 1;
+  const prevYear = monthIndex === 1 ? year - 1 : year;
+  return `${prevYear}-${String(prevMonth).padStart(2, "0")}`;
+}
+
 function toUiExpenseBasis(value: string | null | undefined, cashFlowType: string) {
   if (value === "자산성" || value === "자산") return "자산";
   if (value === "비용성" || value === "비용") return "비용";
@@ -984,6 +994,7 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
         transactions: currentMonth ? mockTransactions.filter((row) => row.date.startsWith(currentMonth)) : mockTransactions,
         bankAccounts: mockBankAccounts,
         balanceMovements: currentMonth === "2026-05" ? mayBalanceMovements : mayBalanceMovements,
+        previousBalanceMovements: [],
         uploadBatches: [],
         rawRows: [],
         rawRowCount: 0
@@ -1024,6 +1035,7 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
       transactions: currentTransactions.map((row) => toTransaction(row, cardIssuerLookup, mappingRules, bankAccountLookup, bankRawContextLookup)),
       bankAccounts,
       balanceMovements: balanceRowsForMonth(currentMonth, dbBalanceMovements),
+      previousBalanceMovements: balanceRowsForMonth(previousMonthKey(currentMonth), dbBalanceMovements),
       uploadBatches: ((batchResult.data || []) as Record<string, string | null>[]).map((row) => ({
         id: String(row.id),
         uploadType: String(row.upload_type || ""),
@@ -1055,6 +1067,7 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
       transactions: currentMonth ? mockTransactions.filter((row) => row.date.startsWith(currentMonth)) : mockTransactions,
       bankAccounts: mockBankAccounts,
       balanceMovements: mayBalanceMovements,
+      previousBalanceMovements: [],
       uploadBatches: [],
       rawRows: [],
       rawRowCount: 0
@@ -1062,7 +1075,7 @@ async function loadDashboardData(requestedMonth?: string, includeRawRows = false
   }
 }
 
-export const getDashboardData = unstable_cache(loadDashboardData, ["finance-dashboard-data-v13"], {
+export const getDashboardData = unstable_cache(loadDashboardData, ["finance-dashboard-data-v14"], {
   revalidate: 300,
   tags: ["dashboard-data"]
 });

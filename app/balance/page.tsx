@@ -175,6 +175,20 @@ function isAssetApplyDecisionMarker(row: BalanceMovement) {
     || compact(row.memo).includes(compact("자산성 지출 반영 제외"));
 }
 
+function balanceTotals(rows: BalanceMovement[]) {
+  const visibleRows = rows.filter((row) => !isAssetApplyDecisionMarker(row));
+  const assets = visibleRows.filter((row) => row.statementType === "자산");
+  const liabilities = visibleRows.filter((row) => row.statementType === "부채");
+  const totalAssets = sumBy(assets, endingAmount);
+  const totalLiabilities = sumBy(liabilities, endingAmount);
+
+  return {
+    totalAssets,
+    totalLiabilities,
+    equity: totalAssets - totalLiabilities
+  };
+}
+
 function parseDepreciationFromMemo(memo: string | null | undefined) {
   const matched = String(memo || "").match(/당월\s*([\d,]+)원/);
   return matched ? Number(matched[1].replace(/,/g, "")) : 0;
@@ -472,7 +486,7 @@ export default async function BalancePage({
   const params = searchParams ? await searchParams : {};
   const selectedMonth = resolveMonthParam(params);
   const data = await getDashboardData(selectedMonth);
-  const { balanceMovements, bankAccounts, transactions } = data;
+  const { balanceMovements, previousBalanceMovements, bankAccounts, transactions } = data;
   const activeMonth = data.currentMonth || "2026-05";
   const visibleBalanceMovements = balanceMovements.filter((row) => !isAssetApplyDecisionMarker(row));
   const viewRows = toViewRows(visibleBalanceMovements);
@@ -483,9 +497,10 @@ export default async function BalancePage({
   const totalAssets = sumBy(assets.filter((row) => row.group !== "현금성자산"), (row) => row.ending) + sumBy(cashDetails, (row) => row.ending);
   const totalLiabilities = sumBy(liabilities, (row) => row.ending);
   const equity = totalAssets - totalLiabilities;
-  const assetChange = sumBy(assets, balanceDelta);
-  const liabilityChange = sumBy(liabilities, balanceDelta);
-  const equityChange = assetChange - liabilityChange;
+  const previousTotals = balanceTotals(previousBalanceMovements);
+  const assetChange = previousBalanceMovements.length > 0 ? totalAssets - previousTotals.totalAssets : sumBy(assets, balanceDelta);
+  const liabilityChange = previousBalanceMovements.length > 0 ? totalLiabilities - previousTotals.totalLiabilities : sumBy(liabilities, balanceDelta);
+  const equityChange = previousBalanceMovements.length > 0 ? equity - previousTotals.equity : assetChange - liabilityChange;
   const assetSegments = balanceGroupSegments(assets, assetGroupOrder, bankAccounts);
   const liabilitySegments = balanceGroupSegments(liabilities, liabilityGroupOrder);
   const capitalSegments = [
